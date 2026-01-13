@@ -101,17 +101,17 @@ export default function Home() {
 
   // Generate realistic stock data
   const generateStockData = (ticker, startDate, endDate) => {
-    const start = new Date(startDate)
-    const end = new Date(endDate)
+    const start = new Date(startDate + 'T00:00:00') // Ensure no timezone issues
+    const end = new Date(endDate + 'T00:00:00')
     
-    // Calculate the number of months to invest (inclusive)
-    // Example: Jan 2025 to Dec 2025 = 12 months
-    const startYear = start.getFullYear()
-    const startMonth = start.getMonth() // 0-11
-    const endYear = end.getFullYear()
-    const endMonth = end.getMonth() // 0-11
+    // Calculate months: each month you invest counts as one data point
+    // Example: Jan 2025 to Dec 2025 = 12 investments (one per month)
+    const yearDiff = end.getFullYear() - start.getFullYear()
+    const monthDiff = end.getMonth() - start.getMonth()
+    const totalMonths = yearDiff * 12 + monthDiff + 1
     
-    const totalMonths = (endYear - startYear) * 12 + (endMonth - startMonth) + 1
+    console.log(`Generating data from ${startDate} to ${endDate}`)
+    console.log(`Total months calculated: ${totalMonths}`)
     
     const data = []
     let currentPrice = 100 + Math.random() * 100
@@ -124,9 +124,11 @@ export default function Home() {
     const monthlyGrowth = growthRates[ticker] || 0.015
     const volatility = 0.08
     
-    // Create exactly totalMonths data points (one per month invested)
+    // Create exactly totalMonths data points
     for (let i = 0; i < totalMonths; i++) {
-      const date = new Date(startYear, startMonth + i, 1)
+      const monthDate = new Date(start)
+      monthDate.setMonth(start.getMonth() + i)
+      
       const trend = currentPrice * monthlyGrowth
       const randomWalk = currentPrice * volatility * (Math.random() - 0.5)
       currentPrice = Math.max(10, currentPrice + trend + randomWalk)
@@ -134,12 +136,13 @@ export default function Home() {
       if (Math.random() < 0.05) currentPrice *= 0.92
       
       data.push({
-        date: date.toISOString().split('T')[0],
+        date: monthDate.toISOString().split('T')[0],
         price: currentPrice,
         month: i,
       })
     }
     
+    console.log(`Created ${data.length} data points`)
     return data
   }
 
@@ -148,14 +151,15 @@ export default function Home() {
     let totalInvested = 0
     let shares = 0
     
+    // Total invested is always: monthlyAmount × number of months
+    totalInvested = monthlyAmount * stockData.length
+    
     if (strategy === 'lump') {
-      // Lump sum: invest total amount at beginning
-      totalInvested = monthlyAmount * stockData.length
+      // Lump sum: invest all at once at the beginning
       shares = totalInvested / stockData[0].price
     } else {
-      // DCA: invest monthly
-      stockData.forEach((point, index) => {
-        totalInvested += monthlyAmount
+      // DCA: invest monthly, buy shares at each month's price
+      stockData.forEach((point) => {
         shares += monthlyAmount / point.price
       })
     }
@@ -170,13 +174,11 @@ export default function Home() {
     let peak = 0
     stockData.forEach((point, i) => {
       let sharesAtPoint = 0
-      let investedAtPoint = 0
       
       if (strategy === 'lump') {
         sharesAtPoint = totalInvested / stockData[0].price
-        investedAtPoint = totalInvested
       } else {
-        investedAtPoint = monthlyAmount * (i + 1)
+        // For DCA, calculate shares accumulated up to this point
         for (let j = 0; j <= i; j++) {
           sharesAtPoint += monthlyAmount / stockData[j].price
         }
@@ -187,6 +189,8 @@ export default function Home() {
       const drawdown = peak > 0 ? ((peak - value) / peak) * 100 : 0
       maxDrawdown = Math.max(maxDrawdown, drawdown)
     })
+    
+    console.log(`Calculate Investment: ${stockData.length} months, $${totalInvested} invested`)
     
     return { totalInvested, finalValue, totalReturn, cagr, shares, years, maxDrawdown }
   }
@@ -230,13 +234,15 @@ export default function Home() {
   // Helper function to get value at specific frame
   const getValueAtFrame = (sim, frameIndex) => {
     let shares = 0
-    let invested = 0
+    // Invested amount at this frame = monthly amount × number of months invested so far
+    const invested = monthlyAmount * (frameIndex + 1)
     
     if (strategy === 'lump') {
-      invested = monthlyAmount * sim.data.length
-      shares = invested / sim.data[0].price
+      // Lump sum: all money invested at start
+      const totalInvested = monthlyAmount * sim.data.length
+      shares = totalInvested / sim.data[0].price
     } else {
-      invested = monthlyAmount * (frameIndex + 1)
+      // DCA: accumulate shares up to this frame
       for (let j = 0; j <= frameIndex; j++) {
         shares += monthlyAmount / sim.data[j].price
       }
@@ -782,13 +788,13 @@ export default function Home() {
                 <div key={sim.ticker} className="p-4 sm:p-6 bg-gray-50 rounded-xl">
                   <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">{sim.ticker} Simulation Results</h3>
                   <p className="text-xs sm:text-sm text-gray-600 mb-4">
-                    Investing ${monthlyAmount}.00 monthly from {new Date(startDate).toLocaleDateString()} to {new Date(endDate).toLocaleDateString()}
+                    Investing ${monthlyAmount}.00 monthly from {startDate} to {endDate}
                   </p>
                   
                   <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-4">
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Total Contributed</div>
-                      <div className="text-base sm:text-xl font-bold text-gray-900">${sim.results.totalInvested.toFixed(0)}</div>
+                      <div className="text-base sm:text-xl font-bold text-gray-900">${(monthlyAmount * sim.data.length).toFixed(0)}</div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Final Value</div>
