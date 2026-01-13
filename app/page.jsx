@@ -64,13 +64,10 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredStocks, setFilteredStocks] = useState([])
   const [showDropdown, setShowDropdown] = useState(false)
-  const [startMonth, setStartMonth] = useState('2020-01')
-  const [endMonth, setEndMonth] = useState(() => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  })
-  const [strategy, setStrategy] = useState('dca')
-  const [investmentAmount, setInvestmentAmount] = useState(100)
+  const [startMonth, setStartMonth] = useState('2023-01')
+  const [endMonth, setEndMonth] = useState('2025-12')
+  const [strategy, setStrategy] = useState('lump')
+  const [investmentAmount, setInvestmentAmount] = useState(10000)
   const [isGenerating, setIsGenerating] = useState(false)
   const [simulationData, setSimulationData] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -80,6 +77,7 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false)
   const canvasRef = useRef(null)
   const searchRef = useRef(null)
+  const resultsRef = useRef(null)
 
   // Load Public.com logo
   useEffect(() => {
@@ -359,7 +357,10 @@ export default function Home() {
       setSimulationData(simulations)
       setIsGenerating(false)
       setCurrentFrame(0)
-      setTimeout(() => setIsPlaying(true), 500)
+      setTimeout(() => {
+        setIsPlaying(true)
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 500)
     } catch (error) {
       console.error('Simulation failed:', error)
       setIsGenerating(false)
@@ -507,7 +508,7 @@ export default function Home() {
     
     // CTA line below X-axis
     ctx.fillStyle = '#475569'
-    ctx.font = 'bold 18px -apple-system, sans-serif'
+    ctx.font = 'bold 20px -apple-system, sans-serif'
     ctx.textAlign = 'center'
     ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 75)
     
@@ -893,7 +894,7 @@ export default function Home() {
       
       // CTA line below X-axis (Instagram size)
       ctx.fillStyle = '#475569'
-      ctx.font = 'bold 28px -apple-system, sans-serif'
+      ctx.font = 'bold 30px -apple-system, sans-serif'
       ctx.textAlign = 'center'
       ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 100)
       
@@ -1315,6 +1316,7 @@ export default function Home() {
         {/* Results */}
         {simulationData && (
           <motion.div
+            ref={resultsRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 mb-8"
@@ -1464,7 +1466,7 @@ export default function Home() {
 
         {/* Footer */}
         <div className="text-center text-gray-500 text-xs sm:text-sm mt-8">
-          <p>⚠️ Past performance is not indicative of future results. This is for educational purposes only.</p>
+          <p>⚠️ Past performance is not indicative of future results. This tool is built by Public.com for educational purposes only.</p>
         </div>
       </div>
     </main>
