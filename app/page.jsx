@@ -104,9 +104,14 @@ export default function Home() {
     const start = new Date(startDate)
     const end = new Date(endDate)
     
-    // Calculate exact months between dates (inclusive of both start and end month)
-    let months = (end.getFullYear() - start.getFullYear()) * 12
-    months += end.getMonth() - start.getMonth() + 1
+    // Calculate the number of months to invest (inclusive)
+    // Example: Jan 2025 to Dec 2025 = 12 months
+    const startYear = start.getFullYear()
+    const startMonth = start.getMonth() // 0-11
+    const endYear = end.getFullYear()
+    const endMonth = end.getMonth() // 0-11
+    
+    const totalMonths = (endYear - startYear) * 12 + (endMonth - startMonth) + 1
     
     const data = []
     let currentPrice = 100 + Math.random() * 100
@@ -119,10 +124,9 @@ export default function Home() {
     const monthlyGrowth = growthRates[ticker] || 0.015
     const volatility = 0.08
     
-    // Loop exactly 'months' times (not months+1)
-    for (let i = 0; i < months; i++) {
-      const date = new Date(start)
-      date.setMonth(date.getMonth() + i)
+    // Create exactly totalMonths data points (one per month invested)
+    for (let i = 0; i < totalMonths; i++) {
+      const date = new Date(startYear, startMonth + i, 1)
       const trend = currentPrice * monthlyGrowth
       const randomWalk = currentPrice * volatility * (Math.random() - 0.5)
       currentPrice = Math.max(10, currentPrice + trend + randomWalk)
