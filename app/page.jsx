@@ -425,28 +425,30 @@ export default function Home() {
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, width, height)
     
-    const padding = { top: 100, right: 110, bottom: 100, left: 110 }
+    const padding = { top: 100, right: 110, bottom: 110, left: 110 }
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
     
     let maxValue = 0
     let minValue = Infinity
-    let maxInvested = 0
     
     if (currentFrame > 0) {
       simulationData.forEach(sim => {
-        const result = getValueAtFrame(sim, currentFrame)
-        maxValue = Math.max(maxValue, result.value)
-        minValue = Math.min(minValue, result.invested)
-        maxInvested = Math.max(maxInvested, result.invested)
+        for (let i = 0; i <= currentFrame; i++) {
+          const result = getValueAtFrame(sim, i)
+          maxValue = Math.max(maxValue, result.value)
+          minValue = Math.min(minValue, result.value, result.invested)
+        }
       })
     } else {
-      // Set initial investment as minimum
       minValue = strategy === 'lump' ? investmentAmount : investmentAmount
+      maxValue = minValue * 1.5
     }
     
-    maxValue = Math.max(maxValue, maxInvested) * 1.15
-    minValue = minValue * 0.95 // Add 5% padding below
+    // Add padding to range
+    const range = maxValue - minValue
+    maxValue = maxValue + range * 0.1
+    minValue = Math.max(0, minValue - range * 0.1)
     const valueRange = maxValue - minValue
     
     // Grid with alternating backgrounds
@@ -494,10 +496,10 @@ export default function Home() {
     }
     
     // CTA line below X-axis
-    ctx.fillStyle = '#64748B'
-    ctx.font = '16px -apple-system, sans-serif'
+    ctx.fillStyle = '#475569'
+    ctx.font = 'bold 18px -apple-system, sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 70)
+    ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 75)
     
     // Contribution line - MORE VISIBLE
     if (currentFrame > 0 && strategy === 'dca') {
@@ -819,21 +821,24 @@ export default function Home() {
       // Calculate value range
       let maxValue = 0
       let minValue = Infinity
-      let maxInvested = 0
       
       if (frame > 0) {
         simulationData.forEach(sim => {
-          const result = getValueAtFrame(sim, frame)
-          maxValue = Math.max(maxValue, result.value)
-          minValue = Math.min(minValue, result.invested)
-          maxInvested = Math.max(maxInvested, result.invested)
+          for (let i = 0; i <= frame; i++) {
+            const result = getValueAtFrame(sim, i)
+            maxValue = Math.max(maxValue, result.value)
+            minValue = Math.min(minValue, result.value, result.invested)
+          }
         })
       } else {
         minValue = strategy === 'lump' ? investmentAmount : investmentAmount
+        maxValue = minValue * 1.5
       }
       
-      maxValue = Math.max(maxValue, maxInvested) * 1.15
-      minValue = minValue * 0.95
+      // Add padding to range
+      const range = maxValue - minValue
+      maxValue = maxValue + range * 0.1
+      minValue = Math.max(0, minValue - range * 0.1)
       const valueRange = maxValue - minValue
       
       // Grid
@@ -876,10 +881,10 @@ export default function Home() {
       }
       
       // CTA line below X-axis (Instagram size)
-      ctx.fillStyle = '#64748B'
-      ctx.font = '22px -apple-system, sans-serif'
+      ctx.fillStyle = '#475569'
+      ctx.font = 'bold 28px -apple-system, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 95)
+      ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 100)
       
       // Contribution line
       if (frame > 0 && strategy === 'dca') {
