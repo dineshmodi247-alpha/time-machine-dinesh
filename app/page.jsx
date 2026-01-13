@@ -376,7 +376,7 @@ export default function Home() {
       return
     }
     
-    const baseSpeed = 50 // 50ms base
+    const baseSpeed = 80 // 80ms base - slower for better viewing
     const interval = setInterval(() => {
       setCurrentFrame(prev => Math.min(prev + 1, maxFrames - 1))
     }, baseSpeed / playbackSpeed)
@@ -485,15 +485,25 @@ export default function Home() {
     ctx.font = 'bold 22px -apple-system, sans-serif'
     ctx.textAlign = 'center'
     const startYear = parseInt(startMonth.split('-')[0])
+    const startMonthNum = parseInt(startMonth.split('-')[1])
     const endYear = parseInt(endMonth.split('-')[0])
-    const yearRange = endYear - startYear + 1
-    const labelsToShow = Math.min(yearRange + 1, 6)
+    const endMonthNum = parseInt(endMonth.split('-')[1])
     
-    for (let i = 0; i < labelsToShow; i++) {
-      const year = startYear + Math.floor((yearRange) * (i / (labelsToShow - 1)))
-      const x = padding.left + (chartWidth / (labelsToShow - 1)) * i
-      ctx.fillText(year.toString(), x, height - padding.bottom + 40)
+    // Create array of years to display
+    const yearsToShow = []
+    for (let y = startYear; y <= endYear; y++) {
+      yearsToShow.push(y)
     }
+    
+    // Limit to max 6 labels
+    const step = Math.ceil(yearsToShow.length / 6)
+    const filteredYears = yearsToShow.filter((_, i) => i % step === 0 || i === yearsToShow.length - 1)
+    
+    filteredYears.forEach((year, i) => {
+      const yearIndex = yearsToShow.indexOf(year)
+      const x = padding.left + (chartWidth / (yearsToShow.length - 1 || 1)) * yearIndex
+      ctx.fillText(year.toString(), x, height - padding.bottom + 40)
+    })
     
     // CTA line below X-axis
     ctx.fillStyle = '#475569'
@@ -501,14 +511,12 @@ export default function Home() {
     ctx.textAlign = 'center'
     ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 75)
     
-    // Contribution line - MORE VISIBLE
+    // Contribution line - SUBTLE for DCA
     if (currentFrame > 0 && strategy === 'dca') {
-      ctx.strokeStyle = '#94A3B8'
-      ctx.lineWidth = 3
-      ctx.setLineDash([8, 6])
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)'
+      ctx.lineWidth = 2
+      ctx.setLineDash([4, 4])
       ctx.lineCap = 'round'
-      ctx.shadowColor = 'rgba(148, 163, 184, 0.3)'
-      ctx.shadowBlur = 5
       ctx.beginPath()
       
       for (let i = 0; i <= currentFrame; i++) {
@@ -520,7 +528,6 @@ export default function Home() {
       }
       ctx.stroke()
       ctx.setLineDash([])
-      ctx.shadowBlur = 0
     }
     
     // Watermark - slightly more visible
@@ -540,6 +547,31 @@ export default function Home() {
     
     simulationData.forEach((sim, idx) => {
       const color = colors[idx % colors.length]
+      
+      // Draw gradient fill under line
+      if (currentFrame > 0) {
+        ctx.beginPath()
+        ctx.moveTo(padding.left, height - padding.bottom)
+        
+        for (let i = 0; i <= currentFrame; i++) {
+          const result = getValueAtFrame(sim, i)
+          const x = padding.left + (chartWidth / (sim.data.length - 1)) * i
+          const y = height - padding.bottom - ((result.value - minValue) / valueRange) * chartHeight
+          ctx.lineTo(x, y)
+        }
+        
+        const lastX = padding.left + (chartWidth / (sim.data.length - 1)) * currentFrame
+        ctx.lineTo(lastX, height - padding.bottom)
+        ctx.closePath()
+        
+        const fillGradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom)
+        fillGradient.addColorStop(0, color + '40')
+        fillGradient.addColorStop(1, color + '05')
+        ctx.fillStyle = fillGradient
+        ctx.fill()
+      }
+      
+      // Draw the line
       ctx.strokeStyle = color
       ctx.lineWidth = 5
       ctx.shadowColor = color
@@ -721,45 +753,16 @@ export default function Home() {
       ctx.fillText(`${arrow} ${Math.abs(totalGain).toFixed(1)}% Growth`, boxX + 18, boxY + 78)
     }
     
-    // Contributed label - ENHANCED
+    // Contributed label - SIMPLE
     if (currentFrame > 0 && strategy === 'dca') {
       const result = getValueAtFrame(simulationData[0], currentFrame)
       const lastX = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * currentFrame
       const lastY = height - padding.bottom - ((result.invested - minValue) / valueRange) * chartHeight
       
-      // Background badge
-      ctx.fillStyle = 'rgba(100, 116, 139, 0.95)'
-      ctx.shadowColor = 'rgba(0,0,0,0.2)'
-      ctx.shadowBlur = 10
-      
-      const labelWidth = 130
-      const labelHeight = 50
-      const labelX = lastX - labelWidth - 25
-      const labelY = lastY - 35
-      
-      // Rounded rectangle
-      const radius = 8
-      ctx.beginPath()
-      ctx.moveTo(labelX + radius, labelY)
-      ctx.lineTo(labelX + labelWidth - radius, labelY)
-      ctx.arcTo(labelX + labelWidth, labelY, labelX + labelWidth, labelY + radius, radius)
-      ctx.lineTo(labelX + labelWidth, labelY + labelHeight - radius)
-      ctx.arcTo(labelX + labelWidth, labelY + labelHeight, labelX + labelWidth - radius, labelY + labelHeight, radius)
-      ctx.lineTo(labelX + radius, labelY + labelHeight)
-      ctx.arcTo(labelX, labelY + labelHeight, labelX, labelY + labelHeight - radius, radius)
-      ctx.lineTo(labelX, labelY + radius)
-      ctx.arcTo(labelX, labelY, labelX + radius, labelY, radius)
-      ctx.closePath()
-      ctx.fill()
-      ctx.shadowBlur = 0
-      
-      ctx.fillStyle = 'white'
-      ctx.font = 'bold 14px -apple-system, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('Contributed', labelX + labelWidth / 2, labelY + 20)
-      
-      ctx.font = 'bold 18px -apple-system, sans-serif'
-      ctx.fillText(`$${(result.invested / 1000).toFixed(2)}K`, labelX + labelWidth / 2, labelY + 40)
+      ctx.fillStyle = 'rgba(100, 116, 139, 0.8)'
+      ctx.font = '14px -apple-system, sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText(`Contributed: $${(result.invested / 1000).toFixed(2)}K`, lastX - 10, lastY - 10)
     }
   }, [simulationData, currentFrame, investmentAmount, strategy, logoImage, startMonth, endMonth])
 
@@ -871,14 +874,22 @@ export default function Home() {
       ctx.textAlign = 'center'
       const startYear = parseInt(startMonth.split('-')[0])
       const endYear = parseInt(endMonth.split('-')[0])
-      const yearRange = endYear - startYear + 1
-      const labelsToShow = Math.min(yearRange + 1, 6)
       
-      for (let i = 0; i < labelsToShow; i++) {
-        const year = startYear + Math.floor((yearRange) * (i / (labelsToShow - 1)))
-        const x = padding.left + (chartWidth / (labelsToShow - 1)) * i
-        ctx.fillText(year.toString(), x, height - padding.bottom + 50)
+      // Create array of years to display
+      const yearsToShow = []
+      for (let y = startYear; y <= endYear; y++) {
+        yearsToShow.push(y)
       }
+      
+      // Limit to max 6 labels
+      const step = Math.ceil(yearsToShow.length / 6)
+      const filteredYears = yearsToShow.filter((_, i) => i % step === 0 || i === yearsToShow.length - 1)
+      
+      filteredYears.forEach((year, i) => {
+        const yearIndex = yearsToShow.indexOf(year)
+        const x = padding.left + (chartWidth / (yearsToShow.length - 1 || 1)) * yearIndex
+        ctx.fillText(year.toString(), x, height - padding.bottom + 50)
+      })
       
       // CTA line below X-axis (Instagram size)
       ctx.fillStyle = '#475569'
@@ -886,11 +897,11 @@ export default function Home() {
       ctx.textAlign = 'center'
       ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 100)
       
-      // Contribution line
+      // Contribution line - SUBTLE
       if (frame > 0 && strategy === 'dca') {
-        ctx.strokeStyle = '#94A3B8'
-        ctx.lineWidth = 4
-        ctx.setLineDash([8, 6])
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)'
+        ctx.lineWidth = 3
+        ctx.setLineDash([4, 4])
         ctx.lineCap = 'round'
         ctx.beginPath()
         
@@ -920,6 +931,30 @@ export default function Home() {
       const colors = ['#00E676', '#9C27B0', '#FF9800']
       simulationData.forEach((sim, idx) => {
         const color = colors[idx % colors.length]
+        
+        // Draw gradient fill under line
+        if (frame > 0) {
+          ctx.beginPath()
+          ctx.moveTo(padding.left, height - padding.bottom)
+          
+          for (let i = 0; i <= frame; i++) {
+            const result = getValueAtFrame(sim, i)
+            const x = padding.left + (chartWidth / (sim.data.length - 1)) * i
+            const y = height - padding.bottom - ((result.value - minValue) / valueRange) * chartHeight
+            ctx.lineTo(x, y)
+          }
+          
+          const lastX = padding.left + (chartWidth / (sim.data.length - 1)) * frame
+          ctx.lineTo(lastX, height - padding.bottom)
+          ctx.closePath()
+          
+          const fillGradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom)
+          fillGradient.addColorStop(0, color + '40')
+          fillGradient.addColorStop(1, color + '05')
+          ctx.fillStyle = fillGradient
+          ctx.fill()
+        }
+        
         ctx.strokeStyle = color
         ctx.lineWidth = 6
         ctx.shadowColor = color
@@ -1076,7 +1111,7 @@ export default function Home() {
           mediaRecorder.stop()
         }, 100)
       }
-    }, (50 / speed))
+    }, (80 / speed))
   }
 
   return (
