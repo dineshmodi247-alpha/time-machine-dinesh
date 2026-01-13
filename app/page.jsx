@@ -343,6 +343,7 @@ export default function Home() {
     
     maxValue = Math.max(maxValue, maxInvested) * 1.15
     minValue = minValue * 0.95 // Add 5% padding below
+    const valueRange = maxValue - minValue
     
     // Grid with alternating backgrounds
     for (let i = 0; i <= 5; i++) {
@@ -367,7 +368,6 @@ export default function Home() {
     ctx.fillStyle = '#1F2937'
     ctx.font = 'bold 22px -apple-system, sans-serif'
     ctx.textAlign = 'right'
-    const valueRange = maxValue - minValue
     for (let i = 0; i <= 5; i++) {
       const value = minValue + (valueRange / 5) * (5 - i)
       const y = padding.top + (chartHeight / 5) * i
@@ -399,7 +399,6 @@ export default function Home() {
       ctx.shadowBlur = 5
       ctx.beginPath()
       
-      const valueRange = maxValue - minValue
       for (let i = 0; i <= currentFrame; i++) {
         const result = getValueAtFrame(simulationData[0], i)
         const x = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * i
@@ -426,7 +425,6 @@ export default function Home() {
     
     // Draw data lines - THICKER & MORE VIBRANT
     const colors = ['#00E676', '#9C27B0', '#FF9800']
-    const valueRange = maxValue - minValue
     
     simulationData.forEach((sim, idx) => {
       const color = colors[idx % colors.length]
@@ -614,7 +612,6 @@ export default function Home() {
     // Contributed label - ENHANCED
     if (currentFrame > 0 && strategy === 'dca') {
       const result = getValueAtFrame(simulationData[0], currentFrame)
-      const valueRange = maxValue - minValue
       const lastX = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * currentFrame
       const lastY = height - padding.bottom - ((result.invested - minValue) / valueRange) * chartHeight
       
