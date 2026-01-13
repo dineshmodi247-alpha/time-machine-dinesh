@@ -321,7 +321,7 @@ export default function Home() {
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, width, height)
     
-    const padding = { top: 100, right: 110, bottom: 80, left: 110 }
+    const padding = { top: 100, right: 110, bottom: 100, left: 110 }
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
     
@@ -388,6 +388,12 @@ export default function Home() {
       const x = padding.left + (chartWidth / (labelsToShow - 1)) * i
       ctx.fillText(year.toString(), x, height - padding.bottom + 40)
     }
+    
+    // CTA line below X-axis
+    ctx.fillStyle = '#64748B'
+    ctx.font = '16px -apple-system, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 70)
     
     // Contribution line - MORE VISIBLE
     if (currentFrame > 0 && strategy === 'dca') {
@@ -702,7 +708,7 @@ export default function Home() {
       ctx.fillRect(0, 0, width, height)
       
       // Scale everything for Instagram vertical format
-      const padding = { top: 150, right: 80, bottom: 120, left: 80 }
+      const padding = { top: 150, right: 80, bottom: 180, left: 120 }
       const chartWidth = width - padding.left - padding.right
       const chartHeight = height - padding.top - padding.bottom
       
@@ -748,7 +754,7 @@ export default function Home() {
       for (let i = 0; i <= 5; i++) {
         const value = minValue + (valueRange / 5) * (5 - i)
         const y = padding.top + (chartHeight / 5) * i
-        ctx.fillText(`$${(value / 1000).toFixed(1)}K`, padding.left - 15, y + 10)
+        ctx.fillText(`$${(value / 1000).toFixed(1)}K`, padding.left - 20, y + 10)
       }
       
       // X-axis labels (Instagram size)
@@ -764,6 +770,12 @@ export default function Home() {
         const x = padding.left + (chartWidth / (labelsToShow - 1)) * i
         ctx.fillText(year.toString(), x, height - padding.bottom + 50)
       }
+      
+      // CTA line below X-axis (Instagram size)
+      ctx.fillStyle = '#64748B'
+      ctx.font = '22px -apple-system, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Get Started on Public.com - Investing for those who take it seriously', width / 2, height - padding.bottom + 95)
       
       // Contribution line
       if (frame > 0 && strategy === 'dca') {
