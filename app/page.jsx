@@ -521,7 +521,7 @@ export default function Home() {
           className="text-center mb-8"
         >
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-2">
-            <span className="text-[#00C853]">Public.com</span> - The Time Machine
+            <span className="text-[#2952CC]">Public.com</span> - Stock Time Machine
           </h1>
           <p className="text-gray-600 text-base sm:text-lg">
             Time travel to see what would have happened if you invested years ago
@@ -554,12 +554,12 @@ export default function Home() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => searchQuery && setShowDropdown(true)}
                   placeholder="Search by ticker or company name..."
-                  className="flex-1 px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none transition-colors"
+                  className="flex-1 px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#2952CC] focus:outline-none transition-colors"
                 />
                 <button
                   onClick={() => searchQuery && addStock(searchQuery.toUpperCase())}
                   disabled={stocks.length >= 3}
-                  className="px-4 sm:px-6 py-3 bg-[#00C853] text-white font-semibold rounded-lg hover:bg-[#00A843] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm sm:text-base"
+                  className="px-4 sm:px-6 py-3 bg-[#2952CC] text-white font-semibold rounded-lg hover:bg-[#1D3FD7] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm sm:text-base"
                 >
                   Add
                 </button>
@@ -611,7 +611,7 @@ export default function Home() {
             {stocks.length > 0 && (
               <div className="flex flex-wrap gap-2 sm:gap-3 mt-4">
                 {stocks.map((stock) => (
-                  <div key={stock} className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#00C853] text-white font-semibold rounded-lg text-sm sm:text-base">
+                  <div key={stock} className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#2952CC] text-white font-semibold rounded-lg text-sm sm:text-base">
                     <span>{stock}</span>
                     <button
                       onClick={() => removeStock(stock)}
@@ -635,7 +635,7 @@ export default function Home() {
                 onChange={(e) => setStartDate(e.target.value)}
                 min="2015-01-01"
                 max={endDate}
-                className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none"
+                className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#2952CC] focus:outline-none"
               />
             </div>
             <div>
@@ -646,7 +646,7 @@ export default function Home() {
                 onChange={(e) => setEndDate(e.target.value)}
                 min={startDate}
                 max={new Date().toISOString().split('T')[0]}
-                className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none"
+                className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#2952CC] focus:outline-none"
               />
             </div>
           </div>
@@ -659,7 +659,7 @@ export default function Home() {
                 onClick={() => setStrategy('dca')}
                 className={`p-4 sm:p-5 rounded-xl border-2 transition-all ${
                   strategy === 'dca'
-                    ? 'border-[#00C853] bg-green-50'
+                    ? 'border-[#2952CC] bg-blue-50'
                     : 'border-gray-300 bg-white hover:border-gray-400'
                 }`}
               >
@@ -689,7 +689,7 @@ export default function Home() {
               onChange={(e) => setMonthlyAmount(parseInt(e.target.value))}
               min="10"
               step="10"
-              className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none mb-3"
+              className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#2952CC] focus:outline-none mb-3"
             />
             <div className="flex flex-wrap gap-2">
               {[50, 100, 250, 500, 1000].map(amount => (
@@ -708,7 +708,7 @@ export default function Home() {
           <button
             onClick={generateSimulation}
             disabled={stocks.length === 0 || isGenerating}
-            className="w-full py-3 sm:py-4 bg-[#00C853] text-white font-bold text-base sm:text-lg rounded-xl hover:bg-[#00A843] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-3 sm:py-4 bg-[#2952CC] text-white font-bold text-base sm:text-lg rounded-xl hover:bg-[#1D3FD7] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
             {isGenerating ? 'Generating Simulation...' : 'Generate Simulation'}
           </button>
@@ -745,7 +745,7 @@ export default function Home() {
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
                 disabled={isRecording}
-                className="px-6 sm:px-8 py-2 sm:py-3 bg-[#00C853] text-white font-semibold rounded-lg hover:bg-[#00A843] disabled:bg-gray-400 text-sm sm:text-base"
+                className="px-6 sm:px-8 py-2 sm:py-3 bg-[#2952CC] text-white font-semibold rounded-lg hover:bg-[#1D3FD7] disabled:bg-gray-400 text-sm sm:text-base"
               >
                 {isPlaying ? '⏸ Pause' : '▶ Play'}
               </button>
@@ -760,7 +760,7 @@ export default function Home() {
             {/* Progress Bar */}
             <div className="h-2 sm:h-3 bg-gray-200 rounded-full overflow-hidden mb-6">
               <div
-                className="h-full bg-[#00C853] transition-all duration-100"
+                className="h-full bg-[#2952CC] transition-all duration-100"
                 style={{ width: `${(currentFrame / (simulationData[0].data.length - 1)) * 100}%` }}
               />
             </div>
