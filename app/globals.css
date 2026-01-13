@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --terminal-green: #00ff41;
+  --terminal-amber: #ffb000;
+  --terminal-cyan: #00ffff;
+  --terminal-bg: #0a0e0f;
+  --terminal-panel: #141a1c;
+}
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+  
+  body {
+    @apply bg-[var(--terminal-bg)] text-[var(--terminal-green)] overflow-x-hidden;
+    font-family: 'Courier New', monospace;
+    position: relative;
+  }
+  
+  /* CRT Screen effect */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.15),
+      rgba(0, 0, 0, 0.15) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+  
+  /* Scan line effect */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      rgba(0, 255, 65, 0.03),
+      transparent
+    );
+    pointer-events: none;
+    z-index: 999;
+    animation: scan-line 8s linear infinite;
+  }
+}
+
+@layer components {
+  .terminal-panel {
+    @apply bg-[var(--terminal-panel)] border-2 border-[var(--terminal-green)]/30 rounded-lg p-6;
+    box-shadow: 
+      0 0 10px rgba(0, 255, 65, 0.1),
+      inset 0 0 20px rgba(0, 255, 65, 0.03);
+  }
+  
+  .terminal-button {
+    @apply bg-[var(--terminal-green)]/10 border-2 border-[var(--terminal-green)] 
+           text-[var(--terminal-green)] px-6 py-3 rounded-lg font-bold
+           transition-all duration-200 hover:bg-[var(--terminal-green)]/20
+           hover:shadow-[0_0_20px_rgba(0,255,65,0.4)]
+           active:scale-95;
+  }
+  
+  .terminal-input {
+    @apply bg-[var(--terminal-bg)] border-2 border-[var(--terminal-green)]/30
+           text-[var(--terminal-green)] px-4 py-3 rounded-lg
+           focus:border-[var(--terminal-green)] focus:outline-none
+           focus:shadow-[0_0_10px_rgba(0,255,65,0.3)]
+           transition-all duration-200;
+  }
+  
+  .glow-text {
+    text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+  }
+  
+  .stock-chip {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-md
+           bg-[var(--terminal-green)]/10 border border-[var(--terminal-green)]/50
+           text-[var(--terminal-green)] text-sm font-bold
+           transition-all duration-200 hover:bg-[var(--terminal-green)]/20;
+  }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.95; }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--terminal-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--terminal-green);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--terminal-cyan);
+}
