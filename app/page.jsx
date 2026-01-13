@@ -104,12 +104,9 @@ export default function Home() {
     const start = new Date(startDate)
     const end = new Date(endDate)
     
-    // Calculate exact months between dates
+    // Calculate exact months between dates (inclusive of both start and end month)
     let months = (end.getFullYear() - start.getFullYear()) * 12
-    months += end.getMonth() - start.getMonth()
-    
-    // If we're in the same month, that's still 1 month of investment
-    if (months === 0) months = 1
+    months += end.getMonth() - start.getMonth() + 1
     
     const data = []
     let currentPrice = 100 + Math.random() * 100
@@ -122,7 +119,8 @@ export default function Home() {
     const monthlyGrowth = growthRates[ticker] || 0.015
     const volatility = 0.08
     
-    for (let i = 0; i <= months; i++) {
+    // Loop exactly 'months' times (not months+1)
+    for (let i = 0; i < months; i++) {
       const date = new Date(start)
       date.setMonth(date.getMonth() + i)
       const trend = currentPrice * monthlyGrowth
