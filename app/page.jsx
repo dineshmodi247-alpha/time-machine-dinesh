@@ -99,19 +99,20 @@ export default function Home() {
     addStock(preset.ticker)
   }
 
-  // Generate realistic stock data
+  // Generate realistic stock data with DAILY datapoints for smooth animation
   const generateStockData = (ticker, startDate, endDate) => {
-    const start = new Date(startDate + 'T00:00:00') // Ensure no timezone issues
+    const start = new Date(startDate + 'T00:00:00')
     const end = new Date(endDate + 'T00:00:00')
     
-    // Calculate months: each month you invest counts as one data point
-    // Example: Jan 2025 to Dec 2025 = 12 investments (one per month)
+    // Calculate total days for animation
+    const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1
+    
+    // Calculate months for investment (DCA happens monthly)
     const yearDiff = end.getFullYear() - start.getFullYear()
     const monthDiff = end.getMonth() - start.getMonth()
     const totalMonths = yearDiff * 12 + monthDiff + 1
     
-    console.log(`Generating data from ${startDate} to ${endDate}`)
-    console.log(`Total months calculated: ${totalMonths}`)
+    console.log(`${ticker}: ${totalDays} days, ${totalMonths} months from ${startDate} to ${endDate}`)
     
     const data = []
     let currentPrice = 100 + Math.random() * 100
@@ -121,52 +122,54 @@ export default function Home() {
       'TSLA': 0.025, 'SPY': 0.012, 'AMD': 0.022, 'QQQ': 0.015,
     }
     
-    const monthlyGrowth = growthRates[ticker] || 0.015
-    const volatility = 0.08
+    const dailyGrowth = (growthRates[ticker] || 0.015) / 30
+    const volatility = 0.02
     
-    // Create exactly totalMonths data points
-    for (let i = 0; i < totalMonths; i++) {
-      const monthDate = new Date(start)
-      monthDate.setMonth(start.getMonth() + i)
+    // Create daily datapoints
+    for (let i = 0; i < totalDays; i++) {
+      const date = new Date(start)
+      date.setDate(start.getDate() + i)
       
-      const trend = currentPrice * monthlyGrowth
+      const trend = currentPrice * dailyGrowth
       const randomWalk = currentPrice * volatility * (Math.random() - 0.5)
       currentPrice = Math.max(10, currentPrice + trend + randomWalk)
       
-      if (Math.random() < 0.05) currentPrice *= 0.92
+      if (Math.random() < 0.01) currentPrice *= 0.98
+      
+      // Track which month this day belongs to
+      const daysSinceStart = i
+      const monthIndex = Math.floor(daysSinceStart / 30)
       
       data.push({
-        date: monthDate.toISOString().split('T')[0],
+        date: date.toISOString().split('T')[0],
         price: currentPrice,
-        month: i,
+        day: i,
+        monthIndex: Math.min(monthIndex, totalMonths - 1),
       })
     }
     
-    console.log(`Created ${data.length} data points`)
-    return data
+    return { data, totalMonths }
   }
 
-  // Calculate investment results - FIXED MATH
-  const calculateInvestment = (stockData, strategy, monthlyAmount) => {
-    let totalInvested = 0
+  // Calculate investment results
+  const calculateInvestment = (stockData, totalMonths, strategy, monthlyAmount) => {
+    let totalInvested = monthlyAmount * totalMonths
     let shares = 0
     
-    // Total invested is always: monthlyAmount × number of months
-    totalInvested = monthlyAmount * stockData.length
-    
     if (strategy === 'lump') {
-      // Lump sum: invest all at once at the beginning
       shares = totalInvested / stockData[0].price
     } else {
-      // DCA: invest monthly, buy shares at each month's price
-      stockData.forEach((point) => {
-        shares += monthlyAmount / point.price
-      })
+      // DCA: invest once per month (approximately every 30 days)
+      for (let i = 0; i < stockData.length; i++) {
+        if (i % 30 === 0 && stockData[i].monthIndex < totalMonths) {
+          shares += monthlyAmount / stockData[i].price
+        }
+      }
     }
     
     const finalValue = shares * stockData[stockData.length - 1].price
     const totalReturn = ((finalValue - totalInvested) / totalInvested) * 100
-    const years = stockData.length / 12
+    const years = totalMonths / 12
     const cagr = (Math.pow(finalValue / totalInvested, 1 / years) - 1) * 100
     
     // Calculate max drawdown
@@ -178,9 +181,10 @@ export default function Home() {
       if (strategy === 'lump') {
         sharesAtPoint = totalInvested / stockData[0].price
       } else {
-        // For DCA, calculate shares accumulated up to this point
         for (let j = 0; j <= i; j++) {
-          sharesAtPoint += monthlyAmount / stockData[j].price
+          if (j % 30 === 0 && stockData[j].monthIndex < totalMonths) {
+            sharesAtPoint += monthlyAmount / stockData[j].price
+          }
         }
       }
       
@@ -190,7 +194,7 @@ export default function Home() {
       maxDrawdown = Math.max(maxDrawdown, drawdown)
     })
     
-    console.log(`Calculate Investment: ${stockData.length} months, $${totalInvested} invested`)
+    console.log(`Investment: ${totalMonths} months × $${monthlyAmount} = $${totalInvested}`)
     
     return { totalInvested, finalValue, totalReturn, cagr, shares, years, maxDrawdown }
   }
@@ -201,15 +205,14 @@ export default function Home() {
     setIsGenerating(true)
     setTimeout(() => {
       const simulations = stocks.map(ticker => {
-        const stockData = generateStockData(ticker, startDate, endDate)
-        const results = calculateInvestment(stockData, strategy, monthlyAmount)
-        return { ticker, data: stockData, results }
+        const { data: stockData, totalMonths } = generateStockData(ticker, startDate, endDate)
+        const results = calculateInvestment(stockData, totalMonths, strategy, monthlyAmount)
+        return { ticker, data: stockData, totalMonths, results }
       })
       
       setSimulationData(simulations)
       setIsGenerating(false)
       setCurrentFrame(0)
-      // Auto-play on first generation
       setTimeout(() => setIsPlaying(true), 500)
     }, 1500)
   }
@@ -226,7 +229,7 @@ export default function Home() {
     
     const interval = setInterval(() => {
       setCurrentFrame(prev => Math.min(prev + 1, maxFrames - 1))
-    }, 50)
+    }, 30) // 30ms for smooth daily animation
     
     return () => clearInterval(interval)
   }, [isPlaying, currentFrame, simulationData, isRecording])
@@ -234,22 +237,23 @@ export default function Home() {
   // Helper function to get value at specific frame
   const getValueAtFrame = (sim, frameIndex) => {
     let shares = 0
-    // Invested amount at this frame = monthly amount × number of months invested so far
-    const invested = monthlyAmount * (frameIndex + 1)
+    const currentDay = sim.data[frameIndex]
+    const monthsInvested = currentDay.monthIndex + 1
+    const invested = monthlyAmount * Math.min(monthsInvested, sim.totalMonths)
     
     if (strategy === 'lump') {
-      // Lump sum: all money invested at start
-      const totalInvested = monthlyAmount * sim.data.length
+      const totalInvested = monthlyAmount * sim.totalMonths
       shares = totalInvested / sim.data[0].price
     } else {
-      // DCA: accumulate shares up to this frame
       for (let j = 0; j <= frameIndex; j++) {
-        shares += monthlyAmount / sim.data[j].price
+        if (j % 30 === 0 && sim.data[j].monthIndex < sim.totalMonths) {
+          shares += monthlyAmount / sim.data[j].price
+        }
       }
     }
     
     return {
-      value: shares * sim.data[frameIndex].price,
+      value: shares * currentDay.price,
       invested: invested,
       shares: shares
     }
@@ -310,7 +314,7 @@ export default function Home() {
       ctx.fillText(`$${(value / 1000).toFixed(1)}K`, padding.left - 15, y + 5)
     }
     
-    // X-axis labels (show years from start date)
+    // X-axis labels
     ctx.textAlign = 'center'
     const startYear = new Date(startDate).getFullYear()
     const endYear = new Date(endDate).getFullYear()
@@ -323,7 +327,7 @@ export default function Home() {
       ctx.fillText(year.toString(), x, height - padding.bottom + 30)
     }
     
-    // Draw contribution line (darker dotted line)
+    // Draw contribution line (dotted)
     if (currentFrame > 0) {
       ctx.strokeStyle = '#94A3B8'
       ctx.lineWidth = 2
@@ -331,9 +335,9 @@ export default function Home() {
       ctx.beginPath()
       
       for (let i = 0; i <= currentFrame; i++) {
-        const invested = strategy === 'lump' 
-          ? monthlyAmount * simulationData[0].data.length 
-          : monthlyAmount * (i + 1)
+        const dayData = simulationData[0].data[i]
+        const monthsInvested = dayData.monthIndex + 1
+        const invested = monthlyAmount * Math.min(monthsInvested, simulationData[0].totalMonths)
         const x = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * i
         const y = height - padding.bottom - (invested / maxValue) * chartHeight
         if (i === 0) ctx.moveTo(x, y)
@@ -380,7 +384,7 @@ export default function Home() {
       ctx.shadowBlur = 0
     })
     
-    // Draw current value labels (top right) - positioned to not overlap
+    // Draw ticker value labels (blended boxes like Total Contributed)
     if (currentFrame > 0) {
       simulationData.forEach((sim, idx) => {
         const result = getValueAtFrame(sim, currentFrame)
@@ -388,9 +392,10 @@ export default function Home() {
         const boxX = width - padding.right - 160
         const boxY = padding.top + (idx * 75)
         
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
-        ctx.shadowColor = 'rgba(0,0,0,0.1)'
-        ctx.shadowBlur = 15
+        // Semi-transparent blended background
+        ctx.fillStyle = 'rgba(240, 253, 244, 0.9)'
+        ctx.shadowColor = 'rgba(0,0,0,0.05)'
+        ctx.shadowBlur = 10
         ctx.fillRect(boxX, boxY, 150, 65)
         ctx.shadowBlur = 0
         
@@ -404,20 +409,20 @@ export default function Home() {
         ctx.fillText(`$${(result.value / 1000).toFixed(2)}K`, boxX + 15, boxY + 48)
       })
       
-      // Top left - total contributed (blended with background)
-      const totalInvested = strategy === 'lump' 
-        ? monthlyAmount * simulationData[0].data.length 
-        : monthlyAmount * (currentFrame + 1)
-      
+      // Top left - total contributed (blended)
+      let totalInvested = 0
       let totalValue = 0
+      
       simulationData.forEach(sim => {
         const result = getValueAtFrame(sim, currentFrame)
+        const currentDay = sim.data[currentFrame]
+        const monthsInvested = currentDay.monthIndex + 1
+        totalInvested += monthlyAmount * Math.min(monthsInvested, sim.totalMonths)
         totalValue += result.value
       })
       
       const totalGain = ((totalValue - totalInvested) / totalInvested) * 100
       
-      // Semi-transparent background that blends
       ctx.fillStyle = 'rgba(240, 253, 244, 0.9)'
       ctx.shadowColor = 'rgba(0,0,0,0.05)'
       ctx.shadowBlur = 10
@@ -438,35 +443,25 @@ export default function Home() {
       ctx.fillText(`${totalGain >= 0 ? '+' : ''}${totalGain.toFixed(1)}% Growth`, padding.left + 15, padding.top - 5)
     }
     
-    // Draw contributed label (darker text)
+    // Draw contributed label (LARGER font, better positioned)
     if (currentFrame > 0) {
-      const invested = strategy === 'lump' 
-        ? monthlyAmount * simulationData[0].data.length 
-        : monthlyAmount * (currentFrame + 1)
+      const currentDay = simulationData[0].data[currentFrame]
+      const monthsInvested = currentDay.monthIndex + 1
+      const invested = monthlyAmount * Math.min(monthsInvested, simulationData[0].totalMonths)
+      
       const lastX = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * currentFrame
       const lastY = height - padding.bottom - (invested / maxValue) * chartHeight
       
+      // Position above the line to avoid interference
       ctx.fillStyle = '#64748B'
-      ctx.font = '12px -apple-system, sans-serif'
+      ctx.font = 'bold 16px -apple-system, sans-serif'
       ctx.textAlign = 'right'
-      ctx.fillText(`Contributed`, lastX - 10, lastY - 8)
-      ctx.fillText(`$${(invested / 1000).toFixed(2)}K`, lastX - 10, lastY + 7)
-    }
-    
-    // Draw regular logo below Y-axis (bottom right area)
-    if (logoImage) {
-      const logoWidth = 60
-      const logoHeight = (logoImage.height / logoImage.width) * logoWidth
-      const logoX = padding.left + 10
-      const logoY = height - padding.bottom + 40
-      
-      ctx.globalAlpha = 0.6
-      ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight)
-      ctx.globalAlpha = 1
+      ctx.fillText(`Contributed`, lastX - 15, lastY - 20)
+      ctx.fillText(`$${(invested / 1000).toFixed(2)}K`, lastX - 15, lastY - 2)
     }
   }, [simulationData, currentFrame, monthlyAmount, strategy, logoImage, startDate, endDate])
 
-  // Download video function - IMMEDIATE download without replay
+  // Download video function
   const downloadVideo = async () => {
     if (!simulationData || !canvasRef.current || isRecording) return
     
@@ -496,10 +491,8 @@ export default function Home() {
       setIsRecording(false)
     }
     
-    // Start recording
     mediaRecorder.start()
     
-    // Animate through all frames
     const maxFrames = simulationData[0].data.length
     const wasPlaying = isPlaying
     setIsPlaying(false)
@@ -516,7 +509,7 @@ export default function Home() {
           if (wasPlaying) setIsPlaying(true)
         }, 100)
       }
-    }, 50)
+    }, 30)
   }
 
   return (
@@ -794,7 +787,7 @@ export default function Home() {
                   <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-4">
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Total Contributed</div>
-                      <div className="text-base sm:text-xl font-bold text-gray-900">${(monthlyAmount * sim.data.length).toFixed(0)}</div>
+                      <div className="text-base sm:text-xl font-bold text-gray-900">${(monthlyAmount * sim.totalMonths).toFixed(0)}</div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Final Value</div>
