@@ -320,7 +320,7 @@ export default function Home() {
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, width, height)
     
-    const padding = { top: 120, right: 80, bottom: 100, left: 90 }
+    const padding = { top: 100, right: 100, bottom: 80, left: 90 }
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
     
@@ -350,12 +350,12 @@ export default function Home() {
     
     // Y-axis
     ctx.fillStyle = '#64748B'
-    ctx.font = '16px -apple-system, sans-serif'
+    ctx.font = '14px -apple-system, sans-serif'
     ctx.textAlign = 'right'
     for (let i = 0; i <= 5; i++) {
       const value = (maxValue / 5) * (5 - i)
       const y = padding.top + (chartHeight / 5) * i
-      ctx.fillText(`$${(value / 1000).toFixed(1)}K`, padding.left - 15, y + 6)
+      ctx.fillText(`$${(value / 1000).toFixed(1)}K`, padding.left - 15, y + 5)
     }
     
     // X-axis
@@ -368,7 +368,7 @@ export default function Home() {
     for (let i = 0; i < labelsToShow; i++) {
       const year = startYear + Math.floor((yearRange) * (i / (labelsToShow - 1)))
       const x = padding.left + (chartWidth / (labelsToShow - 1)) * i
-      ctx.fillText(year.toString(), x, height - padding.bottom + 35)
+      ctx.fillText(year.toString(), x, height - padding.bottom + 30)
     }
     
     // Contribution line
@@ -391,7 +391,7 @@ export default function Home() {
     
     // Watermark
     if (logoImage) {
-      const logoWidth = 240
+      const logoWidth = 180
       const logoHeight = (logoImage.height / logoImage.width) * logoWidth
       const logoX = (width - logoWidth) / 2
       const logoY = (height - logoHeight) / 2
@@ -407,7 +407,7 @@ export default function Home() {
     simulationData.forEach((sim, idx) => {
       const color = colors[idx % colors.length]
       ctx.strokeStyle = color
-      ctx.lineWidth = 4
+      ctx.lineWidth = 3
       ctx.shadowColor = color
       ctx.shadowBlur = 10
       
@@ -431,23 +431,23 @@ export default function Home() {
       simulationData.forEach((sim, idx) => {
         const result = getValueAtFrame(sim, currentFrame)
         
-        const boxX = width - padding.right - 170
-        const boxY = padding.top + (idx * 80)
+        const boxX = width - padding.right - 160
+        const boxY = padding.top + (idx * 75)
         
         ctx.fillStyle = 'rgba(240, 253, 244, 0.9)'
         ctx.shadowColor = 'rgba(0,0,0,0.05)'
         ctx.shadowBlur = 10
-        ctx.fillRect(boxX, boxY, 160, 70)
+        ctx.fillRect(boxX, boxY, 150, 65)
         ctx.shadowBlur = 0
         
         ctx.fillStyle = '#64748B'
-        ctx.font = 'bold 16px -apple-system, sans-serif'
+        ctx.font = 'bold 14px -apple-system, sans-serif'
         ctx.textAlign = 'left'
-        ctx.fillText(sim.ticker, boxX + 15, boxY + 28)
+        ctx.fillText(sim.ticker, boxX + 15, boxY + 25)
         
         ctx.fillStyle = colors[idx % colors.length]
-        ctx.font = 'bold 22px -apple-system, sans-serif'
-        ctx.fillText(`$${(result.value / 1000).toFixed(2)}K`, boxX + 15, boxY + 55)
+        ctx.font = 'bold 20px -apple-system, sans-serif'
+        ctx.fillText(`$${(result.value / 1000).toFixed(2)}K`, boxX + 15, boxY + 48)
       })
       
       // Total invested box
@@ -465,21 +465,21 @@ export default function Home() {
       ctx.fillStyle = 'rgba(240, 253, 244, 0.9)'
       ctx.shadowColor = 'rgba(0,0,0,0.05)'
       ctx.shadowBlur = 10
-      ctx.fillRect(padding.left, padding.top - 95, 200, 85)
+      ctx.fillRect(padding.left, padding.top - 85, 190, 80)
       ctx.shadowBlur = 0
       
       ctx.fillStyle = '#64748B'
-      ctx.font = '15px -apple-system, sans-serif'
+      ctx.font = '14px -apple-system, sans-serif'
       ctx.textAlign = 'left'
-      ctx.fillText(strategy === 'lump' ? 'Lump Sum Invested' : 'Total Contributed', padding.left + 18, padding.top - 68)
+      ctx.fillText(strategy === 'lump' ? 'Lump Sum Invested' : 'Total Contributed', padding.left + 15, padding.top - 63)
       
       ctx.fillStyle = '#00C853'
-      ctx.font = 'bold 32px -apple-system, sans-serif'
-      ctx.fillText(`$${(totalInvested / 1000).toFixed(1)}K`, padding.left + 18, padding.top - 35)
+      ctx.font = 'bold 28px -apple-system, sans-serif'
+      ctx.fillText(`$${(totalInvested / 1000).toFixed(1)}K`, padding.left + 15, padding.top - 33)
       
       ctx.fillStyle = totalGain >= 0 ? '#00C853' : '#EF4444'
-      ctx.font = 'bold 18px -apple-system, sans-serif'
-      ctx.fillText(`${totalGain >= 0 ? '+' : ''}${totalGain.toFixed(1)}% Growth`, padding.left + 18, padding.top - 10)
+      ctx.font = 'bold 16px -apple-system, sans-serif'
+      ctx.fillText(`${totalGain >= 0 ? '+' : ''}${totalGain.toFixed(1)}% Growth`, padding.left + 15, padding.top - 10)
     }
     
     // Contributed label
@@ -489,7 +489,7 @@ export default function Home() {
       const lastY = height - padding.bottom - (result.invested / maxValue) * chartHeight
       
       ctx.fillStyle = '#64748B'
-      ctx.font = 'bold 18px -apple-system, sans-serif'
+      ctx.font = 'bold 16px -apple-system, sans-serif'
       ctx.textAlign = 'right'
       ctx.fillText(`Contributed`, lastX - 18, lastY - 25)
       ctx.fillText(`$${(result.invested / 1000).toFixed(2)}K`, lastX - 18, lastY - 3)
@@ -502,10 +502,10 @@ export default function Home() {
     
     setIsRecording(true)
     
-    // Create offscreen canvas for Instagram Story format
+    // Create offscreen canvas for YouTube/Desktop format
     const offscreenCanvas = document.createElement('canvas')
-    offscreenCanvas.width = 1080
-    offscreenCanvas.height = 1920
+    offscreenCanvas.width = 1920
+    offscreenCanvas.height = 1080
     const offscreenCtx = offscreenCanvas.getContext('2d')
     
     const stream = offscreenCanvas.captureStream(30)
@@ -538,7 +538,7 @@ export default function Home() {
     const recordInterval = setInterval(() => {
       // Draw to offscreen canvas
       const mainCanvas = canvasRef.current
-      offscreenCtx.drawImage(mainCanvas, 0, 0, 1080, 1920)
+      offscreenCtx.drawImage(mainCanvas, 0, 0, 1920, 1080)
       
       // Advance frame
       setCurrentFrame(frame)
@@ -764,10 +764,10 @@ export default function Home() {
             <div className="mb-6 bg-gradient-to-br from-green-50 to-white p-4 rounded-xl">
               <canvas
                 ref={canvasRef}
-                width={1080}
-                height={1920}
+                width={1920}
+                height={1080}
                 className="w-full border border-gray-200 rounded-lg bg-white"
-                style={{ maxWidth: '600px', height: 'auto', margin: '0 auto', display: 'block' }}
+                style={{ maxWidth: '100%', height: 'auto' }}
               />
             </div>
 
