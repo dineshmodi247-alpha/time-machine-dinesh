@@ -27,16 +27,26 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredStocks, setFilteredStocks] = useState([])
   const [showDropdown, setShowDropdown] = useState(false)
-  const [startYear, setStartYear] = useState(2021)
-  const [endYear, setEndYear] = useState(2026)
+  const [startDate, setStartDate] = useState('2021-01-01')
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0])
   const [strategy, setStrategy] = useState('dca')
   const [monthlyAmount, setMonthlyAmount] = useState(100)
   const [isGenerating, setIsGenerating] = useState(false)
   const [simulationData, setSimulationData] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentFrame, setCurrentFrame] = useState(0)
+  const [logoImage, setLogoImage] = useState(null)
   const canvasRef = useRef(null)
   const searchRef = useRef(null)
+
+  // Load Public.com logo
+  useEffect(() => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => setLogoImage(img)
+    img.onerror = () => console.log('Logo failed to load')
+    img.src = 'https://millennialmoney.com/wp-content/uploads/2021/06/public-logo.png'
+  }, [])
 
   // Stock presets
   const presets = [
@@ -44,9 +54,6 @@ export default function Home() {
     { label: 'NVIDIA', ticker: 'NVDA' },
     { label: 'Tesla', ticker: 'TSLA' },
     { label: 'S&P 500', ticker: 'SPY' },
-    { label: 'Apple vs Microsoft', tickers: ['AAPL', 'MSFT'] },
-    { label: 'NVIDIA vs AMD', tickers: ['NVDA', 'AMD'] },
-    { label: 'S&P 500 vs NASDAQ', tickers: ['SPY', 'QQQ'] },
   ]
 
   // Filter stocks based on search
@@ -87,16 +94,14 @@ export default function Home() {
   }
 
   const handlePresetClick = (preset) => {
-    if (preset.tickers) {
-      setStocks(preset.tickers.slice(0, 3))
-    } else {
-      addStock(preset.ticker)
-    }
+    addStock(preset.ticker)
   }
 
   // Generate realistic stock data
-  const generateStockData = (ticker, startYear, endYear) => {
-    const months = (endYear - startYear) * 12
+  const generateStockData = (ticker, startDate, endDate) => {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const months = Math.ceil((end - start) / (1000 * 60 * 60 * 24 * 30))
     const data = []
     let currentPrice = 100 + Math.random() * 100
     
@@ -109,7 +114,8 @@ export default function Home() {
     const volatility = 0.08
     
     for (let i = 0; i <= months; i++) {
-      const date = new Date(startYear, i, 1)
+      const date = new Date(start)
+      date.setMonth(date.getMonth() + i)
       const trend = currentPrice * monthlyGrowth
       const randomWalk = currentPrice * volatility * (Math.random() - 0.5)
       currentPrice = Math.max(10, currentPrice + trend + randomWalk)
@@ -146,7 +152,20 @@ export default function Home() {
     const years = stockData.length / 12
     const cagr = (Math.pow(finalValue / totalInvested, 1 / years) - 1) * 100
     
-    return { totalInvested, finalValue, totalReturn, cagr, shares, years }
+    // Calculate max drawdown
+    let maxDrawdown = 0
+    let peak = 0
+    stockData.forEach((point, i) => {
+      const sharesAtPoint = strategy === 'lump'
+        ? (monthlyAmount * stockData.length) / stockData[0].price
+        : stockData.slice(0, i + 1).reduce((sum, p) => sum + monthlyAmount / p.price, 0)
+      const value = sharesAtPoint * point.price
+      peak = Math.max(peak, value)
+      const drawdown = peak > 0 ? ((peak - value) / peak) * 100 : 0
+      maxDrawdown = Math.max(maxDrawdown, drawdown)
+    })
+    
+    return { totalInvested, finalValue, totalReturn, cagr, shares, years, maxDrawdown }
   }
 
   const generateSimulation = () => {
@@ -155,7 +174,7 @@ export default function Home() {
     setIsGenerating(true)
     setTimeout(() => {
       const simulations = stocks.map(ticker => {
-        const stockData = generateStockData(ticker, startYear, endYear)
+        const stockData = generateStockData(ticker, startDate, endDate)
         const results = calculateInvestment(stockData, strategy, monthlyAmount)
         return { ticker, data: stockData, results }
       })
@@ -184,7 +203,7 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [isPlaying, currentFrame, simulationData])
 
-  // Draw chart on canvas
+  // Draw elegant chart on canvas
   useEffect(() => {
     if (!simulationData || !canvasRef.current) return
     
@@ -193,17 +212,26 @@ export default function Home() {
     const width = canvas.width
     const height = canvas.height
     
-    // Clear canvas
-    ctx.fillStyle = '#FFFFFF'
+    // Clear with gradient background
+    const gradient = ctx.createLinearGradient(0, 0, 0, height)
+    gradient.addColorStop(0, '#F0FDF4')
+    gradient.addColorStop(1, '#FFFFFF')
+    ctx.fillStyle = gradient
     ctx.fillRect(0, 0, width, height)
     
-    // Find max value
+    const padding = { top: 80, right: 60, bottom: 80, left: 80 }
+    const chartWidth = width - padding.left - padding.right
+    const chartHeight = height - padding.top - padding.bottom
+    
+    // Find max value for scaling
     let maxValue = 0
+    let maxInvested = 0
     simulationData.forEach(sim => {
       sim.data.slice(0, currentFrame + 1).forEach(point => {
         const invested = strategy === 'lump' 
           ? monthlyAmount * sim.data.length 
           : monthlyAmount * (point.month + 1)
+        maxInvested = Math.max(maxInvested, invested)
         const shares = strategy === 'lump'
           ? (monthlyAmount * sim.data.length) / sim.data[0].price
           : sim.data.slice(0, point.month + 1).reduce((sum, p) => sum + monthlyAmount / p.price, 0)
@@ -212,42 +240,58 @@ export default function Home() {
       })
     })
     
-    maxValue = maxValue * 1.1
+    maxValue = Math.max(maxValue, maxInvested) * 1.15
     
-    const padding = 80
-    const chartWidth = width - padding * 2
-    const chartHeight = height - padding * 2
-    
-    // Draw grid
-    ctx.strokeStyle = '#E5E7EB'
-    ctx.lineWidth = 2
-    
+    // Draw subtle grid
+    ctx.strokeStyle = '#E0E7E9'
+    ctx.lineWidth = 1
     for (let i = 0; i <= 5; i++) {
-      const y = padding + (chartHeight / 5) * i
+      const y = padding.top + (chartHeight / 5) * i
       ctx.beginPath()
-      ctx.moveTo(padding, y)
-      ctx.lineTo(width - padding, y)
+      ctx.moveTo(padding.left, y)
+      ctx.lineTo(width - padding.right, y)
       ctx.stroke()
     }
     
-    // Draw axes
-    ctx.strokeStyle = '#9CA3AF'
-    ctx.lineWidth = 3
-    ctx.beginPath()
-    ctx.moveTo(padding, padding)
-    ctx.lineTo(padding, height - padding)
-    ctx.lineTo(width - padding, height - padding)
-    ctx.stroke()
-    
     // Y-axis labels
-    ctx.fillStyle = '#6B7280'
-    ctx.font = 'bold 28px -apple-system, sans-serif'
+    ctx.fillStyle = '#64748B'
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif'
     ctx.textAlign = 'right'
-    
     for (let i = 0; i <= 5; i++) {
       const value = (maxValue / 5) * (5 - i)
-      const y = padding + (chartHeight / 5) * i
-      ctx.fillText(`$${value.toFixed(0)}`, padding - 15, y + 10)
+      const y = padding.top + (chartHeight / 5) * i
+      ctx.fillText(`$${(value / 1000).toFixed(1)}K`, padding.left - 15, y + 5)
+    }
+    
+    // X-axis labels (show 5 evenly spaced dates)
+    ctx.textAlign = 'center'
+    const numLabels = 5
+    for (let i = 0; i < numLabels; i++) {
+      const dataIndex = Math.floor((simulationData[0].data.length - 1) * (i / (numLabels - 1)))
+      const date = new Date(simulationData[0].data[dataIndex].date)
+      const label = date.toLocaleDateString('en-US', { year: 'numeric' })
+      const x = padding.left + (chartWidth / (numLabels - 1)) * i
+      ctx.fillText(label, x, height - padding.bottom + 30)
+    }
+    
+    // Draw contribution line (dotted)
+    if (currentFrame > 0) {
+      ctx.strokeStyle = '#CBD5E1'
+      ctx.lineWidth = 2
+      ctx.setLineDash([5, 5])
+      ctx.beginPath()
+      
+      simulationData[0].data.slice(0, currentFrame + 1).forEach((point, i) => {
+        const invested = strategy === 'lump' 
+          ? monthlyAmount * simulationData[0].data.length 
+          : monthlyAmount * (point.month + 1)
+        const x = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * i
+        const y = height - padding.bottom - (invested / maxValue) * chartHeight
+        if (i === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      ctx.stroke()
+      ctx.setLineDash([])
     }
     
     // Draw data lines
@@ -256,7 +300,9 @@ export default function Home() {
     simulationData.forEach((sim, idx) => {
       const color = colors[idx % colors.length]
       ctx.strokeStyle = color
-      ctx.lineWidth = 8
+      ctx.lineWidth = 3
+      ctx.shadowColor = color
+      ctx.shadowBlur = 10
       
       ctx.beginPath()
       
@@ -266,56 +312,115 @@ export default function Home() {
           : sim.data.slice(0, point.month + 1).reduce((sum, p) => sum + monthlyAmount / p.price, 0)
         const value = shares * point.price
         
-        const x = padding + (chartWidth / (sim.data.length - 1)) * i
-        const y = height - padding - (value / maxValue) * chartHeight
+        const x = padding.left + (chartWidth / (sim.data.length - 1)) * i
+        const y = height - padding.bottom - (value / maxValue) * chartHeight
         
         if (i === 0) ctx.moveTo(x, y)
         else ctx.lineTo(x, y)
       })
       
       ctx.stroke()
-      
-      // Current point
-      if (currentFrame > 0) {
+      ctx.shadowBlur = 0
+    })
+    
+    // Draw info boxes
+    if (currentFrame > 0) {
+      simulationData.forEach((sim, idx) => {
         const point = sim.data[currentFrame]
         const shares = strategy === 'lump'
           ? (monthlyAmount * sim.data.length) / sim.data[0].price
           : sim.data.slice(0, currentFrame + 1).reduce((sum, p) => sum + monthlyAmount / p.price, 0)
         const value = shares * point.price
+        const invested = strategy === 'lump' 
+          ? monthlyAmount * sim.data.length 
+          : monthlyAmount * (point.month + 1)
+        const gain = ((value - invested) / invested) * 100
         
-        const x = padding + (chartWidth / (sim.data.length - 1)) * currentFrame
-        const y = height - padding - (value / maxValue) * chartHeight
+        // Top right - current value
+        const boxX = width - padding.right - 160
+        const boxY = padding.top + (idx * 80)
         
-        ctx.fillStyle = color
-        ctx.beginPath()
-        ctx.arc(x, y, 12, 0, Math.PI * 2)
-        ctx.fill()
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+        ctx.shadowColor = 'rgba(0,0,0,0.1)'
+        ctx.shadowBlur = 15
+        ctx.fillRect(boxX, boxY, 150, 65)
+        ctx.shadowBlur = 0
         
-        ctx.font = 'bold 32px -apple-system, sans-serif'
-        ctx.fillText(`${sim.ticker}: $${value.toFixed(0)}`, x + 25, y - 20)
-      }
-    })
-    
-    // Draw date
-    if (currentFrame > 0) {
-      const currentDate = new Date(simulationData[0].data[currentFrame].date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-      ctx.fillStyle = '#1F2937'
-      ctx.font = 'bold 36px -apple-system, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText(currentDate, width / 2, height - 50)
+        ctx.fillStyle = '#64748B'
+        ctx.font = 'bold 14px -apple-system, sans-serif'
+        ctx.textAlign = 'left'
+        ctx.fillText(sim.ticker, boxX + 15, boxY + 25)
+        
+        ctx.fillStyle = '#00C853'
+        ctx.font = 'bold 20px -apple-system, sans-serif'
+        ctx.fillText(`$${(value / 1000).toFixed(2)}K`, boxX + 15, boxY + 48)
+      })
+      
+      // Top left - total contributed
+      const invested = strategy === 'lump' 
+        ? monthlyAmount * simulationData[0].data.length 
+        : monthlyAmount * (currentFrame + 1)
+      const totalValue = simulationData.reduce((sum, sim) => {
+        const shares = strategy === 'lump'
+          ? (monthlyAmount * sim.data.length) / sim.data[0].price
+          : sim.data.slice(0, currentFrame + 1).reduce((s, p) => s + monthlyAmount / p.price, 0)
+        return sum + (shares * sim.data[currentFrame].price)
+      }, 0)
+      const totalGain = ((totalValue - invested) / invested) * 100
+      
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+      ctx.shadowColor = 'rgba(0,0,0,0.1)'
+      ctx.shadowBlur = 15
+      ctx.fillRect(padding.left, padding.top - 20, 180, 75)
+      ctx.shadowBlur = 0
+      
+      ctx.fillStyle = '#64748B'
+      ctx.font = '13px -apple-system, sans-serif'
+      ctx.textAlign = 'left'
+      ctx.fillText('Total Contributed', padding.left + 15, padding.top + 5)
+      
+      ctx.fillStyle = '#00C853'
+      ctx.font = 'bold 28px -apple-system, sans-serif'
+      ctx.fillText(`$${(invested / 1000).toFixed(1)}K`, padding.left + 15, padding.top + 35)
+      
+      ctx.fillStyle = totalGain >= 0 ? '#00C853' : '#EF4444'
+      ctx.font = 'bold 16px -apple-system, sans-serif'
+      ctx.fillText(`${totalGain >= 0 ? '+' : ''}${totalGain.toFixed(1)}% Growth`, padding.left + 15, padding.top + 55)
     }
     
-    // Public.com logo/watermark - PROMINENT
-    ctx.fillStyle = '#00C853'
-    ctx.font = 'bold 48px -apple-system, sans-serif'
-    ctx.textAlign = 'right'
-    ctx.fillText('Public.com', width - padding - 20, height - padding - 30)
+    // Draw contributed label (bottom left of chart area)
+    if (currentFrame > 0) {
+      const invested = strategy === 'lump' 
+        ? monthlyAmount * simulationData[0].data.length 
+        : monthlyAmount * (currentFrame + 1)
+      const lastX = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * currentFrame
+      const lastY = height - padding.bottom - (invested / maxValue) * chartHeight
+      
+      ctx.fillStyle = '#94A3B8'
+      ctx.font = '12px -apple-system, sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText(`Contributed`, lastX - 10, lastY - 5)
+      ctx.fillText(`$${(invested / 1000).toFixed(2)}K`, lastX - 10, lastY + 10)
+    }
     
-    // Tagline
-    ctx.font = 'bold 24px -apple-system, sans-serif'
-    ctx.fillStyle = '#6B7280'
-    ctx.fillText('Invest in stocks & crypto', width - padding - 20, height - padding + 10)
-  }, [simulationData, currentFrame, monthlyAmount, strategy])
+    // Draw Public.com logo (small and subtle)
+    if (logoImage) {
+      const logoWidth = 80
+      const logoHeight = (logoImage.height / logoImage.width) * logoWidth
+      const logoX = width - padding.right - logoWidth - 10
+      const logoY = height - padding.bottom - logoHeight - 10
+      
+      ctx.globalAlpha = 0.4
+      ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight)
+      ctx.globalAlpha = 1
+    } else {
+      // Fallback text logo
+      ctx.fillStyle = '#94A3B8'
+      ctx.font = '14px -apple-system, sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText('Public.com', width - padding.right - 10, height - padding.bottom - 15)
+    }
+  }, [simulationData, currentFrame, monthlyAmount, strategy, logoImage])
 
   // Download video function
   const downloadVideo = async () => {
@@ -342,12 +447,9 @@ export default function Home() {
     }
     
     mediaRecorder.start()
-    
-    // Play through animation
     setIsPlaying(true)
     setCurrentFrame(0)
     
-    // Stop recording after animation completes
     const maxFrames = simulationData[0].data.length
     setTimeout(() => {
       mediaRecorder.stop()
@@ -356,18 +458,18 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F5F7FA] p-6">
-      <div className="max-w-7xl mx-auto">
+    <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8"
         >
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-2">
             <span className="text-[#00C853]">Public.com</span> - The Time Machine
           </h1>
-          <p className="text-gray-600 text-lg">
+          <p className="text-gray-600 text-base sm:text-lg">
             Time travel to see what would have happened if you invested years ago
           </p>
         </motion.div>
@@ -377,16 +479,16 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl shadow-lg p-8 mb-8"
+          className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 mb-8"
         >
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Public's Time Machine</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Public's Time Machine</h2>
+          <p className="text-gray-600 mb-6 text-sm sm:text-base">
             See what would have happened if you started investing years ago
           </p>
 
-          {/* Stock Selection with Autocomplete */}
+          {/* Stock Selection */}
           <div className="mb-6">
-            <label className="block text-gray-700 font-semibold mb-3">
+            <label className="block text-gray-700 font-semibold mb-3 text-sm sm:text-base">
               Stock Tickers (add 1-3 stocks)
             </label>
             
@@ -398,12 +500,12 @@ export default function Home() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => searchQuery && setShowDropdown(true)}
                   placeholder="Search by ticker or company name..."
-                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none transition-colors"
+                  className="flex-1 px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none transition-colors"
                 />
                 <button
                   onClick={() => searchQuery && addStock(searchQuery.toUpperCase())}
                   disabled={stocks.length >= 3}
-                  className="px-6 py-3 bg-[#00C853] text-white font-semibold rounded-lg hover:bg-[#00A843] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 sm:px-6 py-3 bg-[#00C853] text-white font-semibold rounded-lg hover:bg-[#00A843] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm sm:text-base"
                 >
                   Add
                 </button>
@@ -425,8 +527,8 @@ export default function Home() {
                         disabled={stocks.includes(stock.ticker)}
                         className="w-full px-4 py-3 text-left hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed border-b border-gray-100 last:border-b-0 transition-colors"
                       >
-                        <div className="font-semibold text-gray-900">{stock.ticker}</div>
-                        <div className="text-sm text-gray-600">{stock.name}</div>
+                        <div className="font-semibold text-gray-900 text-sm sm:text-base">{stock.ticker}</div>
+                        <div className="text-xs sm:text-sm text-gray-600">{stock.name}</div>
                       </button>
                     ))}
                   </motion.div>
@@ -436,14 +538,14 @@ export default function Home() {
 
             {/* Quick Presets */}
             <div className="mt-4">
-              <p className="text-sm text-gray-600 mb-2">Quick Presets:</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-2">Quick Presets:</p>
               <div className="flex flex-wrap gap-2">
                 {presets.map((preset, idx) => (
                   <button
                     key={idx}
                     onClick={() => handlePresetClick(preset)}
                     disabled={stocks.length >= 3}
-                    className="text-sm px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="text-xs sm:text-sm px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {preset.label}
                   </button>
@@ -453,9 +555,9 @@ export default function Home() {
 
             {/* Selected Stocks */}
             {stocks.length > 0 && (
-              <div className="flex flex-wrap gap-3 mt-4">
+              <div className="flex flex-wrap gap-2 sm:gap-3 mt-4">
                 {stocks.map((stock) => (
-                  <div key={stock} className="inline-flex items-center gap-2 px-4 py-2 bg-[#00C853] text-white font-semibold rounded-lg">
+                  <div key={stock} className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#00C853] text-white font-semibold rounded-lg text-sm sm:text-base">
                     <span>{stock}</span>
                     <button
                       onClick={() => removeStock(stock)}
@@ -469,78 +571,78 @@ export default function Home() {
             )}
           </div>
 
-          {/* Year Range */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* Date Range Pickers */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
             <div>
-              <label className="block text-gray-700 font-semibold mb-2">Start Year</label>
+              <label className="block text-gray-700 font-semibold mb-2 text-sm sm:text-base">Start Date</label>
               <input
-                type="number"
-                value={startYear}
-                onChange={(e) => setStartYear(parseInt(e.target.value))}
-                min="2000"
-                max={endYear - 1}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                min="2015-01-01"
+                max={endDate}
+                className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-gray-700 font-semibold mb-2">End Year</label>
+              <label className="block text-gray-700 font-semibold mb-2 text-sm sm:text-base">End Date</label>
               <input
-                type="number"
-                value={endYear}
-                onChange={(e) => setEndYear(parseInt(e.target.value))}
-                min={startYear + 1}
-                max="2030"
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                min={startDate}
+                max={new Date().toISOString().split('T')[0]}
+                className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none"
               />
             </div>
           </div>
 
           {/* Investment Strategy */}
           <div className="mb-6">
-            <label className="block text-gray-700 font-semibold mb-3">Investment Strategy</label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block text-gray-700 font-semibold mb-3 text-sm sm:text-base">Investment Strategy</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
                 onClick={() => setStrategy('dca')}
-                className={`p-5 rounded-xl border-2 transition-all ${
+                className={`p-4 sm:p-5 rounded-xl border-2 transition-all ${
                   strategy === 'dca'
                     ? 'border-[#00C853] bg-green-50'
                     : 'border-gray-300 bg-white hover:border-gray-400'
                 }`}
               >
-                <div className="font-bold text-gray-900 mb-1">Dollar Cost Averaging</div>
-                <div className="text-sm text-gray-600">Invest monthly</div>
+                <div className="font-bold text-gray-900 mb-1 text-sm sm:text-base">Dollar Cost Averaging</div>
+                <div className="text-xs sm:text-sm text-gray-600">Invest monthly</div>
               </button>
               <button
                 onClick={() => setStrategy('lump')}
-                className={`p-5 rounded-xl border-2 transition-all ${
+                className={`p-4 sm:p-5 rounded-xl border-2 transition-all ${
                   strategy === 'lump'
                     ? 'border-[#7C3AED] bg-purple-50'
                     : 'border-gray-300 bg-white hover:border-gray-400'
                 }`}
               >
-                <div className="font-bold text-gray-900 mb-1">Lump Sum</div>
-                <div className="text-sm text-gray-600">One-time investment</div>
+                <div className="font-bold text-gray-900 mb-1 text-sm sm:text-base">Lump Sum</div>
+                <div className="text-xs sm:text-sm text-gray-600">One-time investment</div>
               </button>
             </div>
           </div>
 
           {/* Monthly Amount */}
           <div className="mb-6">
-            <label className="block text-gray-700 font-semibold mb-2">Monthly Amount</label>
+            <label className="block text-gray-700 font-semibold mb-2 text-sm sm:text-base">Monthly Amount</label>
             <input
               type="number"
               value={monthlyAmount}
               onChange={(e) => setMonthlyAmount(parseInt(e.target.value))}
               min="10"
               step="10"
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none mb-3"
+              className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#00C853] focus:outline-none mb-3"
             />
             <div className="flex flex-wrap gap-2">
               {[50, 100, 250, 500, 1000].map(amount => (
                 <button
                   key={amount}
                   onClick={() => setMonthlyAmount(amount)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
+                  className="px-3 sm:px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-xs sm:text-sm font-medium"
                 >
                   ${amount}/mo
                 </button>
@@ -552,56 +654,56 @@ export default function Home() {
           <button
             onClick={generateSimulation}
             disabled={stocks.length === 0 || isGenerating}
-            className="w-full py-4 bg-[#00C853] text-white font-bold text-lg rounded-xl hover:bg-[#00A843] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-3 sm:py-4 bg-[#00C853] text-white font-bold text-base sm:text-lg rounded-xl hover:bg-[#00A843] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
             {isGenerating ? 'Generating Simulation...' : 'Generate Simulation'}
           </button>
         </motion.div>
 
-        {/* Full Width Video Player */}
+        {/* Results Section */}
         {simulationData && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl shadow-lg p-8 mb-8"
+            className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 mb-8"
           >
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Time Machine Results</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Your Time Machine Results</h2>
             
             {/* Canvas */}
-            <div className="mb-6 flex justify-center">
+            <div className="mb-6 bg-gradient-to-br from-green-50 to-white p-4 rounded-xl">
               <canvas
                 ref={canvasRef}
-                width={1080}
-                height={1920}
-                className="border-2 border-gray-200 rounded-xl bg-white"
-                style={{ maxWidth: '100%', height: 'auto', aspectRatio: '9/16' }}
+                width={1200}
+                height={600}
+                className="w-full border border-gray-200 rounded-lg bg-white"
+                style={{ maxWidth: '100%', height: 'auto' }}
               />
             </div>
 
             {/* Playback Controls */}
-            <div className="flex items-center justify-center gap-4 mb-4">
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mb-4">
               <button
                 onClick={() => setCurrentFrame(0)}
-                className="px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200"
+                className="px-4 sm:px-6 py-2 sm:py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 text-sm sm:text-base"
               >
                 ⏮ Reset
               </button>
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className="px-8 py-3 bg-[#00C853] text-white font-semibold rounded-lg hover:bg-[#00A843]"
+                className="px-6 sm:px-8 py-2 sm:py-3 bg-[#00C853] text-white font-semibold rounded-lg hover:bg-[#00A843] text-sm sm:text-base"
               >
                 {isPlaying ? '⏸ Pause' : '▶ Play'}
               </button>
               <button
                 onClick={() => setCurrentFrame(simulationData[0].data.length - 1)}
-                className="px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200"
+                className="px-4 sm:px-6 py-2 sm:py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 text-sm sm:text-base"
               >
                 ⏭ End
               </button>
             </div>
 
             {/* Progress Bar */}
-            <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-6">
+            <div className="h-2 sm:h-3 bg-gray-200 rounded-full overflow-hidden mb-6">
               <div
                 className="h-full bg-[#00C853] transition-all duration-100"
                 style={{ width: `${(currentFrame / (simulationData[0].data.length - 1)) * 100}%` }}
@@ -611,58 +713,50 @@ export default function Home() {
             {/* Download Button */}
             <button
               onClick={downloadVideo}
-              className="w-full py-4 bg-[#7C3AED] text-white font-bold text-lg rounded-xl hover:bg-[#6D28D9] transition-colors"
+              className="w-full py-3 sm:py-4 bg-[#7C3AED] text-white font-bold text-base sm:text-lg rounded-xl hover:bg-[#6D28D9] transition-colors mb-6"
             >
-              📥 Download Instagram Story Video
+              📥 Download Video
             </button>
 
             {/* Results Summary */}
-            <div className="grid gap-6 mt-8">
+            <div className="grid gap-4 sm:gap-6">
               {simulationData.map((sim) => (
-                <div key={sim.ticker} className="p-6 bg-gray-50 rounded-xl">
-                  <h3 className="text-xl font-bold text-gray-900 mb-1">{sim.ticker} Simulation Results</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Investing ${monthlyAmount}.00 monthly from {startYear} to {endYear}
+                <div key={sim.ticker} className="p-4 sm:p-6 bg-gray-50 rounded-xl">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">{sim.ticker} Simulation Results</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 mb-4">
+                    Investing ${monthlyAmount}.00 monthly from {new Date(startDate).toLocaleDateString()} to {new Date(endDate).toLocaleDateString()}
                   </p>
                   
-                  <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-4">
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Total Contributed</div>
-                      <div className="text-xl font-bold text-gray-900">${sim.results.totalInvested.toFixed(2)}</div>
+                      <div className="text-base sm:text-xl font-bold text-gray-900">${sim.results.totalInvested.toFixed(0)}</div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Final Value</div>
-                      <div className="text-xl font-bold text-[#00C853]">${sim.results.finalValue.toFixed(2)}</div>
+                      <div className="text-base sm:text-xl font-bold text-[#00C853]">${sim.results.finalValue.toFixed(0)}</div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Total Return</div>
-                      <div className={`text-xl font-bold ${sim.results.totalReturn >= 0 ? 'text-[#00C853]' : 'text-red-500'}`}>
-                        {sim.results.totalReturn >= 0 ? '+' : ''}{sim.results.totalReturn.toFixed(2)}%
+                      <div className={`text-base sm:text-xl font-bold ${sim.results.totalReturn >= 0 ? 'text-[#00C853]' : 'text-red-500'}`}>
+                        {sim.results.totalReturn >= 0 ? '+' : ''}{sim.results.totalReturn.toFixed(1)}%
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                  <div className="grid grid-cols-3 gap-3 sm:gap-4 pt-4 border-t border-gray-200">
                     <div>
                       <div className="text-xs text-gray-600 mb-1">CAGR</div>
-                      <div className="font-bold text-gray-900">{sim.results.cagr.toFixed(2)}%</div>
+                      <div className="text-sm sm:text-base font-bold text-gray-900">{sim.results.cagr.toFixed(1)}%</div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Years</div>
-                      <div className="font-bold text-gray-900">{sim.results.years.toFixed(1)}</div>
+                      <div className="text-sm sm:text-base font-bold text-gray-900">{sim.results.years.toFixed(1)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Shares</div>
-                      <div className="font-bold text-gray-900">{sim.results.shares.toFixed(2)}</div>
+                      <div className="text-xs text-gray-600 mb-1">Max Drawdown</div>
+                      <div className="text-sm sm:text-base font-bold text-gray-900">{sim.results.maxDrawdown.toFixed(1)}%</div>
                     </div>
-                  </div>
-
-                  <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
-                    <p className="text-sm text-gray-700">
-                      💡 By consistently investing ${monthlyAmount}.00 every month for {sim.results.years.toFixed(1)} years, 
-                      your portfolio would have grown to <span className="font-bold text-[#00C853]">${sim.results.finalValue.toFixed(2)}</span>, 
-                      a gain of <span className="font-bold text-[#00C853]">${(sim.results.finalValue - sim.results.totalInvested).toFixed(2)}</span>.
-                    </p>
                   </div>
                 </div>
               ))}
@@ -671,7 +765,7 @@ export default function Home() {
         )}
 
         {/* Footer */}
-        <div className="text-center text-gray-500 text-sm mt-8">
+        <div className="text-center text-gray-500 text-xs sm:text-sm mt-8">
           <p>⚠️ Past performance is not indicative of future results. This is for educational purposes only.</p>
         </div>
       </div>
