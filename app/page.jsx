@@ -143,6 +143,104 @@ export default function Home() {
     addStock(preset.ticker)
   }
 
+  // Fetch real stock data from Yahoo Finance
+  const fetchStockData = async (ticker, startMonth, endMonth) => {
+    const start = new Date(startMonth + '-01T00:00:00')
+    const end = new Date(endMonth + '-01T00:00:00')
+    end.setMonth(end.getMonth() + 1)
+    end.setDate(0)
+    
+    const period1 = Math.floor(start.getTime() / 1000)
+    const period2 = Math.floor(end.getTime() / 1000)
+    
+    try {
+      // Using corsproxy.io to handle CORS
+      const response = await fetch(
+        `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=1wk`)}`
+      )
+      const data = await response.json()
+      
+      if (data.chart?.error || !data.chart?.result) {
+        throw new Error('Invalid response')
+      }
+      
+      const quotes = data.chart.result[0]
+      const timestamps = quotes.timestamp
+      const prices = quotes.indicators.quote[0].close
+      
+      const stockData = []
+      for (let i = 0; i < timestamps.length; i++) {
+        if (prices[i] !== null) {
+          const date = new Date(timestamps[i] * 1000)
+          stockData.push({
+            date: date.toISOString().split('T')[0],
+            price: prices[i],
+            week: i,
+            monthIndex: Math.floor(i / 4.33),
+          })
+        }
+      }
+      
+      // Calculate months
+      const yearDiff = end.getFullYear() - start.getFullYear()
+      const monthDiff = end.getMonth() - start.getMonth()
+      const totalMonths = yearDiff * 12 + monthDiff + 1
+      
+      console.log(`✓ Fetched real data for ${ticker}: ${stockData.length} weeks`)
+      return { data: stockData, totalMonths }
+    } catch (error) {
+      console.error(`Failed to fetch ${ticker}, using fallback:`, error)
+      return generateFallbackData(ticker, startMonth, endMonth)
+    }
+  }
+  
+  // Fallback if Yahoo Finance fails
+  const generateFallbackData = (ticker, startMonth, endMonth) => {
+    const start = new Date(startMonth + '-01T00:00:00')
+    const end = new Date(endMonth + '-01T00:00:00')
+    end.setMonth(end.getMonth() + 1)
+    end.setDate(0)
+    
+    const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1
+    const totalWeeks = Math.ceil(totalDays / 7)
+    
+    const yearDiff = end.getFullYear() - start.getFullYear()
+    const monthDiff = end.getMonth() - start.getMonth()
+    const totalMonths = yearDiff * 12 + monthDiff + 1
+    
+    const data = []
+    let currentPrice = 100 + Math.random() * 100
+    
+    const growthRates = {
+      'NVDA': 0.035, 'AAPL': 0.018, 'MSFT': 0.020, 'GOOGL': 0.015,
+      'TSLA': 0.025, 'SPY': 0.012, 'AMD': 0.022, 'QQQ': 0.015,
+      'AMZN': 0.022, 'META': 0.024, 'NFLX': 0.020,
+    }
+    
+    const weeklyGrowth = (growthRates[ticker] || 0.015) / 4.33
+    const volatility = 0.03
+    
+    for (let i = 0; i < totalWeeks; i++) {
+      const date = new Date(start)
+      date.setDate(start.getDate() + (i * 7))
+      
+      const trend = currentPrice * weeklyGrowth
+      const randomWalk = currentPrice * volatility * (Math.random() - 0.5)
+      currentPrice = Math.max(10, currentPrice + trend + randomWalk)
+      
+      if (Math.random() < 0.02) currentPrice *= 0.98
+      
+      data.push({
+        date: date.toISOString().split('T')[0],
+        price: currentPrice,
+        week: i,
+        monthIndex: Math.min(Math.floor(i / 4.33), totalMonths - 1),
+      })
+    }
+    
+    return { data, totalMonths }
+  }
+
   // Generate stock data with WEEKLY datapoints
   const generateStockData = (ticker, startMonth, endMonth) => {
     const start = new Date(startMonth + '-01T00:00:00')
@@ -244,22 +342,28 @@ export default function Home() {
     return { totalInvested, finalValue, totalReturn, cagr, shares, years, maxDrawdown }
   }
 
-  const generateSimulation = () => {
+  const generateSimulation = async () => {
     if (stocks.length === 0) return
     
     setIsGenerating(true)
-    setTimeout(() => {
-      const simulations = stocks.map(ticker => {
-        const { data: stockData, totalMonths } = generateStockData(ticker, startMonth, endMonth)
-        const results = calculateInvestment(stockData, totalMonths, strategy, investmentAmount)
-        return { ticker, data: stockData, totalMonths, results }
-      })
+    
+    try {
+      const simulations = await Promise.all(
+        stocks.map(async (ticker) => {
+          const { data: stockData, totalMonths } = await fetchStockData(ticker, startMonth, endMonth)
+          const results = calculateInvestment(stockData, totalMonths, strategy, investmentAmount)
+          return { ticker, data: stockData, totalMonths, results }
+        })
+      )
       
       setSimulationData(simulations)
       setIsGenerating(false)
       setCurrentFrame(0)
       setTimeout(() => setIsPlaying(true), 500)
-    }, 1500)
+    } catch (error) {
+      console.error('Simulation failed:', error)
+      setIsGenerating(false)
+    }
   }
 
   // Animation with speed control
