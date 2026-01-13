@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Bucko.ai - The Time Machine',
+  title: 'Public.com - Stock Time Machine',
   description: 'Time travel to see what would have happened if you invested years ago',
 }
 
