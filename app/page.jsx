@@ -27,7 +27,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredStocks, setFilteredStocks] = useState([])
   const [showDropdown, setShowDropdown] = useState(false)
-  const [startDate, setStartDate] = useState('2021-01-01')
+  const [startDate, setStartDate] = useState('2015-01-01')
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0])
   const [strategy, setStrategy] = useState('dca')
   const [monthlyAmount, setMonthlyAmount] = useState(100)
@@ -36,8 +36,10 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentFrame, setCurrentFrame] = useState(0)
   const [logoImage, setLogoImage] = useState(null)
+  const [isRecording, setIsRecording] = useState(false)
   const canvasRef = useRef(null)
   const searchRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
 
   // Load Public.com logo
   useEffect(() => {
@@ -132,16 +134,18 @@ export default function Home() {
     return data
   }
 
-  // Calculate investment results
+  // Calculate investment results - FIXED MATH
   const calculateInvestment = (stockData, strategy, monthlyAmount) => {
     let totalInvested = 0
     let shares = 0
     
     if (strategy === 'lump') {
+      // Lump sum: invest total amount at beginning
       totalInvested = monthlyAmount * stockData.length
       shares = totalInvested / stockData[0].price
     } else {
-      stockData.forEach(point => {
+      // DCA: invest monthly
+      stockData.forEach((point, index) => {
         totalInvested += monthlyAmount
         shares += monthlyAmount / point.price
       })
@@ -156,9 +160,19 @@ export default function Home() {
     let maxDrawdown = 0
     let peak = 0
     stockData.forEach((point, i) => {
-      const sharesAtPoint = strategy === 'lump'
-        ? (monthlyAmount * stockData.length) / stockData[0].price
-        : stockData.slice(0, i + 1).reduce((sum, p) => sum + monthlyAmount / p.price, 0)
+      let sharesAtPoint = 0
+      let investedAtPoint = 0
+      
+      if (strategy === 'lump') {
+        sharesAtPoint = totalInvested / stockData[0].price
+        investedAtPoint = totalInvested
+      } else {
+        investedAtPoint = monthlyAmount * (i + 1)
+        for (let j = 0; j <= i; j++) {
+          sharesAtPoint += monthlyAmount / stockData[j].price
+        }
+      }
+      
       const value = sharesAtPoint * point.price
       peak = Math.max(peak, value)
       const drawdown = peak > 0 ? ((peak - value) / peak) * 100 : 0
@@ -182,13 +196,14 @@ export default function Home() {
       setSimulationData(simulations)
       setIsGenerating(false)
       setCurrentFrame(0)
-      setIsPlaying(false)
+      // Auto-play on first generation
+      setTimeout(() => setIsPlaying(true), 500)
     }, 1500)
   }
 
   // Animation playback
   useEffect(() => {
-    if (!isPlaying || !simulationData) return
+    if (!isPlaying || !simulationData || isRecording) return
     
     const maxFrames = simulationData[0]?.data.length || 0
     if (currentFrame >= maxFrames - 1) {
@@ -201,7 +216,29 @@ export default function Home() {
     }, 50)
     
     return () => clearInterval(interval)
-  }, [isPlaying, currentFrame, simulationData])
+  }, [isPlaying, currentFrame, simulationData, isRecording])
+
+  // Helper function to get value at specific frame
+  const getValueAtFrame = (sim, frameIndex) => {
+    let shares = 0
+    let invested = 0
+    
+    if (strategy === 'lump') {
+      invested = monthlyAmount * sim.data.length
+      shares = invested / sim.data[0].price
+    } else {
+      invested = monthlyAmount * (frameIndex + 1)
+      for (let j = 0; j <= frameIndex; j++) {
+        shares += monthlyAmount / sim.data[j].price
+      }
+    }
+    
+    return {
+      value: shares * sim.data[frameIndex].price,
+      invested: invested,
+      shares: shares
+    }
+  }
 
   // Draw elegant chart on canvas
   useEffect(() => {
@@ -219,26 +256,21 @@ export default function Home() {
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, width, height)
     
-    const padding = { top: 80, right: 60, bottom: 80, left: 80 }
+    const padding = { top: 100, right: 80, bottom: 80, left: 90 }
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
     
     // Find max value for scaling
     let maxValue = 0
     let maxInvested = 0
-    simulationData.forEach(sim => {
-      sim.data.slice(0, currentFrame + 1).forEach(point => {
-        const invested = strategy === 'lump' 
-          ? monthlyAmount * sim.data.length 
-          : monthlyAmount * (point.month + 1)
-        maxInvested = Math.max(maxInvested, invested)
-        const shares = strategy === 'lump'
-          ? (monthlyAmount * sim.data.length) / sim.data[0].price
-          : sim.data.slice(0, point.month + 1).reduce((sum, p) => sum + monthlyAmount / p.price, 0)
-        const value = shares * point.price
-        maxValue = Math.max(maxValue, value)
+    
+    if (currentFrame > 0) {
+      simulationData.forEach(sim => {
+        const result = getValueAtFrame(sim, currentFrame)
+        maxValue = Math.max(maxValue, result.value)
+        maxInvested = Math.max(maxInvested, result.invested)
       })
-    })
+    }
     
     maxValue = Math.max(maxValue, maxInvested) * 1.15
     
@@ -263,35 +295,49 @@ export default function Home() {
       ctx.fillText(`$${(value / 1000).toFixed(1)}K`, padding.left - 15, y + 5)
     }
     
-    // X-axis labels (show 5 evenly spaced dates)
+    // X-axis labels (show years from start date)
     ctx.textAlign = 'center'
-    const numLabels = 5
-    for (let i = 0; i < numLabels; i++) {
-      const dataIndex = Math.floor((simulationData[0].data.length - 1) * (i / (numLabels - 1)))
-      const date = new Date(simulationData[0].data[dataIndex].date)
-      const label = date.toLocaleDateString('en-US', { year: 'numeric' })
-      const x = padding.left + (chartWidth / (numLabels - 1)) * i
-      ctx.fillText(label, x, height - padding.bottom + 30)
+    const startYear = new Date(startDate).getFullYear()
+    const endYear = new Date(endDate).getFullYear()
+    const yearRange = endYear - startYear + 1
+    const labelsToShow = Math.min(yearRange, 6)
+    
+    for (let i = 0; i < labelsToShow; i++) {
+      const year = startYear + Math.floor((yearRange - 1) * (i / (labelsToShow - 1)))
+      const x = padding.left + (chartWidth / (labelsToShow - 1)) * i
+      ctx.fillText(year.toString(), x, height - padding.bottom + 30)
     }
     
-    // Draw contribution line (dotted)
+    // Draw contribution line (darker dotted line)
     if (currentFrame > 0) {
-      ctx.strokeStyle = '#CBD5E1'
+      ctx.strokeStyle = '#94A3B8'
       ctx.lineWidth = 2
       ctx.setLineDash([5, 5])
       ctx.beginPath()
       
-      simulationData[0].data.slice(0, currentFrame + 1).forEach((point, i) => {
+      for (let i = 0; i <= currentFrame; i++) {
         const invested = strategy === 'lump' 
           ? monthlyAmount * simulationData[0].data.length 
-          : monthlyAmount * (point.month + 1)
+          : monthlyAmount * (i + 1)
         const x = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * i
         const y = height - padding.bottom - (invested / maxValue) * chartHeight
         if (i === 0) ctx.moveTo(x, y)
         else ctx.lineTo(x, y)
-      })
+      }
       ctx.stroke()
       ctx.setLineDash([])
+    }
+    
+    // Draw watermark logo in center
+    if (logoImage) {
+      const logoWidth = 200
+      const logoHeight = (logoImage.height / logoImage.width) * logoWidth
+      const logoX = (width - logoWidth) / 2
+      const logoY = (height - logoHeight) / 2
+      
+      ctx.globalAlpha = 0.08
+      ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight)
+      ctx.globalAlpha = 1
     }
     
     // Draw data lines
@@ -306,39 +352,26 @@ export default function Home() {
       
       ctx.beginPath()
       
-      sim.data.slice(0, currentFrame + 1).forEach((point, i) => {
-        const shares = strategy === 'lump'
-          ? (monthlyAmount * sim.data.length) / sim.data[0].price
-          : sim.data.slice(0, point.month + 1).reduce((sum, p) => sum + monthlyAmount / p.price, 0)
-        const value = shares * point.price
-        
+      for (let i = 0; i <= currentFrame; i++) {
+        const result = getValueAtFrame(sim, i)
         const x = padding.left + (chartWidth / (sim.data.length - 1)) * i
-        const y = height - padding.bottom - (value / maxValue) * chartHeight
+        const y = height - padding.bottom - (result.value / maxValue) * chartHeight
         
         if (i === 0) ctx.moveTo(x, y)
         else ctx.lineTo(x, y)
-      })
+      }
       
       ctx.stroke()
       ctx.shadowBlur = 0
     })
     
-    // Draw info boxes
+    // Draw current value labels (top right) - positioned to not overlap
     if (currentFrame > 0) {
       simulationData.forEach((sim, idx) => {
-        const point = sim.data[currentFrame]
-        const shares = strategy === 'lump'
-          ? (monthlyAmount * sim.data.length) / sim.data[0].price
-          : sim.data.slice(0, currentFrame + 1).reduce((sum, p) => sum + monthlyAmount / p.price, 0)
-        const value = shares * point.price
-        const invested = strategy === 'lump' 
-          ? monthlyAmount * sim.data.length 
-          : monthlyAmount * (point.month + 1)
-        const gain = ((value - invested) / invested) * 100
+        const result = getValueAtFrame(sim, currentFrame)
         
-        // Top right - current value
         const boxX = width - padding.right - 160
-        const boxY = padding.top + (idx * 80)
+        const boxY = padding.top + (idx * 75)
         
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
         ctx.shadowColor = 'rgba(0,0,0,0.1)'
@@ -351,44 +384,46 @@ export default function Home() {
         ctx.textAlign = 'left'
         ctx.fillText(sim.ticker, boxX + 15, boxY + 25)
         
-        ctx.fillStyle = '#00C853'
+        ctx.fillStyle = colors[idx % colors.length]
         ctx.font = 'bold 20px -apple-system, sans-serif'
-        ctx.fillText(`$${(value / 1000).toFixed(2)}K`, boxX + 15, boxY + 48)
+        ctx.fillText(`$${(result.value / 1000).toFixed(2)}K`, boxX + 15, boxY + 48)
       })
       
-      // Top left - total contributed
-      const invested = strategy === 'lump' 
+      // Top left - total contributed (blended with background)
+      const totalInvested = strategy === 'lump' 
         ? monthlyAmount * simulationData[0].data.length 
         : monthlyAmount * (currentFrame + 1)
-      const totalValue = simulationData.reduce((sum, sim) => {
-        const shares = strategy === 'lump'
-          ? (monthlyAmount * sim.data.length) / sim.data[0].price
-          : sim.data.slice(0, currentFrame + 1).reduce((s, p) => s + monthlyAmount / p.price, 0)
-        return sum + (shares * sim.data[currentFrame].price)
-      }, 0)
-      const totalGain = ((totalValue - invested) / invested) * 100
       
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
-      ctx.shadowColor = 'rgba(0,0,0,0.1)'
-      ctx.shadowBlur = 15
-      ctx.fillRect(padding.left, padding.top - 20, 180, 75)
+      let totalValue = 0
+      simulationData.forEach(sim => {
+        const result = getValueAtFrame(sim, currentFrame)
+        totalValue += result.value
+      })
+      
+      const totalGain = ((totalValue - totalInvested) / totalInvested) * 100
+      
+      // Semi-transparent background that blends
+      ctx.fillStyle = 'rgba(240, 253, 244, 0.9)'
+      ctx.shadowColor = 'rgba(0,0,0,0.05)'
+      ctx.shadowBlur = 10
+      ctx.fillRect(padding.left, padding.top - 80, 180, 75)
       ctx.shadowBlur = 0
       
       ctx.fillStyle = '#64748B'
       ctx.font = '13px -apple-system, sans-serif'
       ctx.textAlign = 'left'
-      ctx.fillText('Total Contributed', padding.left + 15, padding.top + 5)
+      ctx.fillText('Total Contributed', padding.left + 15, padding.top - 55)
       
       ctx.fillStyle = '#00C853'
       ctx.font = 'bold 28px -apple-system, sans-serif'
-      ctx.fillText(`$${(invested / 1000).toFixed(1)}K`, padding.left + 15, padding.top + 35)
+      ctx.fillText(`$${(totalInvested / 1000).toFixed(1)}K`, padding.left + 15, padding.top - 25)
       
       ctx.fillStyle = totalGain >= 0 ? '#00C853' : '#EF4444'
       ctx.font = 'bold 16px -apple-system, sans-serif'
-      ctx.fillText(`${totalGain >= 0 ? '+' : ''}${totalGain.toFixed(1)}% Growth`, padding.left + 15, padding.top + 55)
+      ctx.fillText(`${totalGain >= 0 ? '+' : ''}${totalGain.toFixed(1)}% Growth`, padding.left + 15, padding.top - 5)
     }
     
-    // Draw contributed label (bottom left of chart area)
+    // Draw contributed label (darker text)
     if (currentFrame > 0) {
       const invested = strategy === 'lump' 
         ? monthlyAmount * simulationData[0].data.length 
@@ -396,36 +431,31 @@ export default function Home() {
       const lastX = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * currentFrame
       const lastY = height - padding.bottom - (invested / maxValue) * chartHeight
       
-      ctx.fillStyle = '#94A3B8'
+      ctx.fillStyle = '#64748B'
       ctx.font = '12px -apple-system, sans-serif'
       ctx.textAlign = 'right'
-      ctx.fillText(`Contributed`, lastX - 10, lastY - 5)
-      ctx.fillText(`$${(invested / 1000).toFixed(2)}K`, lastX - 10, lastY + 10)
+      ctx.fillText(`Contributed`, lastX - 10, lastY - 8)
+      ctx.fillText(`$${(invested / 1000).toFixed(2)}K`, lastX - 10, lastY + 7)
     }
     
-    // Draw Public.com logo (small and subtle)
+    // Draw regular logo below Y-axis (bottom right area)
     if (logoImage) {
-      const logoWidth = 80
+      const logoWidth = 60
       const logoHeight = (logoImage.height / logoImage.width) * logoWidth
-      const logoX = width - padding.right - logoWidth - 10
-      const logoY = height - padding.bottom - logoHeight - 10
+      const logoX = padding.left + 10
+      const logoY = height - padding.bottom + 40
       
-      ctx.globalAlpha = 0.4
+      ctx.globalAlpha = 0.6
       ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight)
       ctx.globalAlpha = 1
-    } else {
-      // Fallback text logo
-      ctx.fillStyle = '#94A3B8'
-      ctx.font = '14px -apple-system, sans-serif'
-      ctx.textAlign = 'right'
-      ctx.fillText('Public.com', width - padding.right - 10, height - padding.bottom - 15)
     }
-  }, [simulationData, currentFrame, monthlyAmount, strategy, logoImage])
+  }, [simulationData, currentFrame, monthlyAmount, strategy, logoImage, startDate, endDate])
 
-  // Download video function
+  // Download video function - IMMEDIATE download without replay
   const downloadVideo = async () => {
-    if (!simulationData || !canvasRef.current) return
+    if (!simulationData || !canvasRef.current || isRecording) return
     
+    setIsRecording(true)
     const canvas = canvasRef.current
     const stream = canvas.captureStream(30)
     const mediaRecorder = new MediaRecorder(stream, {
@@ -433,8 +463,12 @@ export default function Home() {
       videoBitsPerSecond: 5000000
     })
     
+    mediaRecorderRef.current = mediaRecorder
     const chunks = []
-    mediaRecorder.ondataavailable = (e) => chunks.push(e.data)
+    
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data)
+    }
     
     mediaRecorder.onstop = () => {
       const blob = new Blob(chunks, { type: 'video/webm' })
@@ -444,17 +478,30 @@ export default function Home() {
       a.download = `public-time-machine-${Date.now()}.webm`
       a.click()
       URL.revokeObjectURL(url)
+      setIsRecording(false)
     }
     
+    // Start recording
     mediaRecorder.start()
-    setIsPlaying(true)
-    setCurrentFrame(0)
     
+    // Animate through all frames
     const maxFrames = simulationData[0].data.length
-    setTimeout(() => {
-      mediaRecorder.stop()
-      setIsPlaying(false)
-    }, maxFrames * 50 + 500)
+    const wasPlaying = isPlaying
+    setIsPlaying(false)
+    
+    let frame = 0
+    const recordInterval = setInterval(() => {
+      setCurrentFrame(frame)
+      frame++
+      
+      if (frame >= maxFrames) {
+        clearInterval(recordInterval)
+        setTimeout(() => {
+          mediaRecorder.stop()
+          if (wasPlaying) setIsPlaying(true)
+        }, 100)
+      }
+    }, 50)
   }
 
   return (
@@ -683,19 +730,20 @@ export default function Home() {
             {/* Playback Controls */}
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mb-4">
               <button
-                onClick={() => setCurrentFrame(0)}
+                onClick={() => { setCurrentFrame(0); setIsPlaying(false); }}
                 className="px-4 sm:px-6 py-2 sm:py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 text-sm sm:text-base"
               >
                 ⏮ Reset
               </button>
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className="px-6 sm:px-8 py-2 sm:py-3 bg-[#00C853] text-white font-semibold rounded-lg hover:bg-[#00A843] text-sm sm:text-base"
+                disabled={isRecording}
+                className="px-6 sm:px-8 py-2 sm:py-3 bg-[#00C853] text-white font-semibold rounded-lg hover:bg-[#00A843] disabled:bg-gray-400 text-sm sm:text-base"
               >
                 {isPlaying ? '⏸ Pause' : '▶ Play'}
               </button>
               <button
-                onClick={() => setCurrentFrame(simulationData[0].data.length - 1)}
+                onClick={() => { setCurrentFrame(simulationData[0].data.length - 1); setIsPlaying(false); }}
                 className="px-4 sm:px-6 py-2 sm:py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 text-sm sm:text-base"
               >
                 ⏭ End
@@ -713,9 +761,10 @@ export default function Home() {
             {/* Download Button */}
             <button
               onClick={downloadVideo}
-              className="w-full py-3 sm:py-4 bg-[#7C3AED] text-white font-bold text-base sm:text-lg rounded-xl hover:bg-[#6D28D9] transition-colors mb-6"
+              disabled={isRecording}
+              className="w-full py-3 sm:py-4 bg-[#7C3AED] text-white font-bold text-base sm:text-lg rounded-xl hover:bg-[#6D28D9] disabled:bg-gray-400 transition-colors mb-6"
             >
-              📥 Download Video
+              {isRecording ? '⏺ Recording...' : '📥 Download Video'}
             </button>
 
             {/* Results Summary */}
