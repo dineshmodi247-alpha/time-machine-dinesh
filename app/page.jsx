@@ -316,11 +316,12 @@ export default function Home() {
     
     const gradient = ctx.createLinearGradient(0, 0, 0, height)
     gradient.addColorStop(0, '#F0FDF4')
-    gradient.addColorStop(1, '#FFFFFF')
+    gradient.addColorStop(0.5, '#FFFFFF')
+    gradient.addColorStop(1, '#F9FAFB')
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, width, height)
     
-    const padding = { top: 100, right: 100, bottom: 80, left: 90 }
+    const padding = { top: 100, right: 110, bottom: 80, left: 100 }
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
     
@@ -337,28 +338,38 @@ export default function Home() {
     
     maxValue = Math.max(maxValue, maxInvested) * 1.15
     
-    // Grid
-    ctx.strokeStyle = '#E0E7E9'
-    ctx.lineWidth = 1
+    // Grid with alternating backgrounds
     for (let i = 0; i <= 5; i++) {
       const y = padding.top + (chartHeight / 5) * i
+      
+      // Alternating row backgrounds for better readability
+      if (i < 5) {
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(249, 250, 251, 0.5)' : 'rgba(255, 255, 255, 0.3)'
+        ctx.fillRect(padding.left, y, chartWidth, chartHeight / 5)
+      }
+      
+      // Grid line
+      ctx.strokeStyle = '#E5E7EB'
+      ctx.lineWidth = 1
       ctx.beginPath()
       ctx.moveTo(padding.left, y)
       ctx.lineTo(width - padding.right, y)
       ctx.stroke()
     }
     
-    // Y-axis
-    ctx.fillStyle = '#64748B'
-    ctx.font = '14px -apple-system, sans-serif'
+    // Y-axis labels - LARGER & BOLDER
+    ctx.fillStyle = '#1F2937'
+    ctx.font = 'bold 18px -apple-system, sans-serif'
     ctx.textAlign = 'right'
     for (let i = 0; i <= 5; i++) {
       const value = (maxValue / 5) * (5 - i)
       const y = padding.top + (chartHeight / 5) * i
-      ctx.fillText(`$${(value / 1000).toFixed(1)}K`, padding.left - 15, y + 5)
+      ctx.fillText(`$${(value / 1000).toFixed(1)}K`, padding.left - 20, y + 7)
     }
     
-    // X-axis
+    // X-axis labels - LARGER & BOLDER
+    ctx.fillStyle = '#1F2937'
+    ctx.font = 'bold 18px -apple-system, sans-serif'
     ctx.textAlign = 'center'
     const startYear = parseInt(startMonth.split('-')[0])
     const endYear = parseInt(endMonth.split('-')[0])
@@ -368,14 +379,17 @@ export default function Home() {
     for (let i = 0; i < labelsToShow; i++) {
       const year = startYear + Math.floor((yearRange) * (i / (labelsToShow - 1)))
       const x = padding.left + (chartWidth / (labelsToShow - 1)) * i
-      ctx.fillText(year.toString(), x, height - padding.bottom + 30)
+      ctx.fillText(year.toString(), x, height - padding.bottom + 35)
     }
     
-    // Contribution line
+    // Contribution line - MORE VISIBLE
     if (currentFrame > 0 && strategy === 'dca') {
       ctx.strokeStyle = '#94A3B8'
-      ctx.lineWidth = 2
-      ctx.setLineDash([5, 5])
+      ctx.lineWidth = 3
+      ctx.setLineDash([8, 6])
+      ctx.lineCap = 'round'
+      ctx.shadowColor = 'rgba(148, 163, 184, 0.3)'
+      ctx.shadowBlur = 5
       ctx.beginPath()
       
       for (let i = 0; i <= currentFrame; i++) {
@@ -387,29 +401,32 @@ export default function Home() {
       }
       ctx.stroke()
       ctx.setLineDash([])
+      ctx.shadowBlur = 0
     }
     
-    // Watermark
+    // Watermark - slightly more visible
     if (logoImage) {
-      const logoWidth = 180
+      const logoWidth = 200
       const logoHeight = (logoImage.height / logoImage.width) * logoWidth
       const logoX = (width - logoWidth) / 2
       const logoY = (height - logoHeight) / 2
       
-      ctx.globalAlpha = 0.08
+      ctx.globalAlpha = 0.12
       ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight)
       ctx.globalAlpha = 1
     }
     
-    // Data lines
-    const colors = ['#00C853', '#7C3AED', '#F59E0B']
+    // Draw data lines - THICKER & MORE VIBRANT
+    const colors = ['#00E676', '#9C27B0', '#FF9800']
     
     simulationData.forEach((sim, idx) => {
       const color = colors[idx % colors.length]
       ctx.strokeStyle = color
-      ctx.lineWidth = 3
+      ctx.lineWidth = 5
       ctx.shadowColor = color
-      ctx.shadowBlur = 10
+      ctx.shadowBlur = 15
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
       
       ctx.beginPath()
       
@@ -422,35 +439,104 @@ export default function Home() {
         else ctx.lineTo(x, y)
       }
       
-      ctx.stroke()
-      ctx.shadowBlur = 0
+      // Add pulsing circle at current position
+      if (currentFrame > 0) {
+        const result = getValueAtFrame(sim, currentFrame)
+        const x = padding.left + (chartWidth / (sim.data.length - 1)) * currentFrame
+        const y = height - padding.bottom - (result.value / maxValue) * chartHeight
+        
+        // Pulsing effect
+        const pulse = Math.sin(Date.now() / 200) * 3 + 10
+        
+        ctx.beginPath()
+        ctx.arc(x, y, pulse, 0, Math.PI * 2)
+        ctx.fillStyle = color
+        ctx.shadowColor = color
+        ctx.shadowBlur = 20
+        ctx.fill()
+        ctx.shadowBlur = 0
+        
+        // White center
+        ctx.beginPath()
+        ctx.arc(x, y, 4, 0, Math.PI * 2)
+        ctx.fillStyle = 'white'
+        ctx.fill()
+        
+        // Show milestone badges for major gains
+        const percentGain = ((result.value - result.invested) / result.invested) * 100
+        const milestones = [50, 100, 200, 300, 500]
+        const currentMilestone = milestones.find(m => percentGain >= m && percentGain < m + 10)
+        
+        if (currentMilestone) {
+          // Milestone badge
+          ctx.save()
+          ctx.font = 'bold 16px -apple-system, sans-serif'
+          ctx.fillStyle = color
+          ctx.shadowColor = color
+          ctx.shadowBlur = 15
+          ctx.textAlign = 'center'
+          ctx.fillText(`🎉 ${currentMilestone}%`, x, y - 30)
+          ctx.restore()
+        }
+      }
     })
     
-    // Ticker boxes
+    // Ticker boxes - ENHANCED & DYNAMIC
     if (currentFrame > 0) {
       simulationData.forEach((sim, idx) => {
         const result = getValueAtFrame(sim, currentFrame)
+        const percentGain = ((result.value - result.invested) / result.invested) * 100
         
-        const boxX = width - padding.right - 160
-        const boxY = padding.top + (idx * 75)
+        const boxX = width - padding.right - 200
+        const boxY = padding.top + (idx * 95)
         
-        ctx.fillStyle = 'rgba(240, 253, 244, 0.9)'
-        ctx.shadowColor = 'rgba(0,0,0,0.05)'
-        ctx.shadowBlur = 10
-        ctx.fillRect(boxX, boxY, 150, 65)
+        // Gradient background
+        const boxGradient = ctx.createLinearGradient(boxX, boxY, boxX, boxY + 85)
+        boxGradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)')
+        boxGradient.addColorStop(1, 'rgba(240, 253, 244, 0.98)')
+        
+        ctx.fillStyle = boxGradient
+        ctx.shadowColor = 'rgba(0,0,0,0.15)'
+        ctx.shadowBlur = 20
+        ctx.strokeStyle = colors[idx % colors.length]
+        ctx.lineWidth = 3
+        
+        // Rounded rectangle
+        const radius = 12
+        ctx.beginPath()
+        ctx.moveTo(boxX + radius, boxY)
+        ctx.lineTo(boxX + 190 - radius, boxY)
+        ctx.arcTo(boxX + 190, boxY, boxX + 190, boxY + radius, radius)
+        ctx.lineTo(boxX + 190, boxY + 85 - radius)
+        ctx.arcTo(boxX + 190, boxY + 85, boxX + 190 - radius, boxY + 85, radius)
+        ctx.lineTo(boxX + radius, boxY + 85)
+        ctx.arcTo(boxX, boxY + 85, boxX, boxY + 85 - radius, radius)
+        ctx.lineTo(boxX, boxY + radius)
+        ctx.arcTo(boxX, boxY, boxX + radius, boxY, radius)
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
         ctx.shadowBlur = 0
         
-        ctx.fillStyle = '#64748B'
-        ctx.font = 'bold 14px -apple-system, sans-serif'
+        // Ticker name
+        ctx.fillStyle = '#1F2937'
+        ctx.font = 'bold 18px -apple-system, sans-serif'
         ctx.textAlign = 'left'
-        ctx.fillText(sim.ticker, boxX + 15, boxY + 25)
+        ctx.fillText(sim.ticker, boxX + 18, boxY + 30)
         
+        // Current value
         ctx.fillStyle = colors[idx % colors.length]
-        ctx.font = 'bold 20px -apple-system, sans-serif'
-        ctx.fillText(`$${(result.value / 1000).toFixed(2)}K`, boxX + 15, boxY + 48)
+        ctx.font = 'bold 26px -apple-system, sans-serif'
+        ctx.fillText(`$${(result.value / 1000).toFixed(2)}K`, boxX + 18, boxY + 58)
+        
+        // Percentage gain with arrow
+        const arrow = percentGain >= 0 ? '↑' : '↓'
+        ctx.fillStyle = percentGain >= 0 ? '#00E676' : '#FF5252'
+        ctx.font = 'bold 16px -apple-system, sans-serif'
+        ctx.fillText(`${arrow} ${Math.abs(percentGain).toFixed(1)}%`, boxX + 18, boxY + 78)
       })
       
-      // Total invested box
+      // Total invested box - PREMIUM STYLING
       let totalInvested = 0
       let totalValue = 0
       
@@ -462,37 +548,96 @@ export default function Home() {
       
       const totalGain = ((totalValue - totalInvested) / totalInvested) * 100
       
-      ctx.fillStyle = 'rgba(240, 253, 244, 0.9)'
-      ctx.shadowColor = 'rgba(0,0,0,0.05)'
-      ctx.shadowBlur = 10
-      ctx.fillRect(padding.left, padding.top - 85, 190, 80)
+      // Gradient background
+      const totalBoxGradient = ctx.createLinearGradient(padding.left, padding.top - 95, padding.left, padding.top - 10)
+      totalBoxGradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)')
+      totalBoxGradient.addColorStop(1, 'rgba(240, 253, 244, 0.98)')
+      
+      ctx.fillStyle = totalBoxGradient
+      ctx.shadowColor = 'rgba(0,0,0,0.15)'
+      ctx.shadowBlur = 20
+      ctx.strokeStyle = totalGain >= 0 ? '#00E676' : '#FF5252'
+      ctx.lineWidth = 3
+      
+      // Rounded rectangle
+      const radius = 12
+      const boxX = padding.left
+      const boxY = padding.top - 95
+      const boxW = 220
+      const boxH = 85
+      
+      ctx.beginPath()
+      ctx.moveTo(boxX + radius, boxY)
+      ctx.lineTo(boxX + boxW - radius, boxY)
+      ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + radius, radius)
+      ctx.lineTo(boxX + boxW, boxY + boxH - radius)
+      ctx.arcTo(boxX + boxW, boxY + boxH, boxX + boxW - radius, boxY + boxH, radius)
+      ctx.lineTo(boxX + radius, boxY + boxH)
+      ctx.arcTo(boxX, boxY + boxH, boxX, boxY + boxH - radius, radius)
+      ctx.lineTo(boxX, boxY + radius)
+      ctx.arcTo(boxX, boxY, boxX + radius, boxY, radius)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
       ctx.shadowBlur = 0
       
+      // Label
       ctx.fillStyle = '#64748B'
       ctx.font = '14px -apple-system, sans-serif'
       ctx.textAlign = 'left'
-      ctx.fillText(strategy === 'lump' ? 'Lump Sum Invested' : 'Total Contributed', padding.left + 15, padding.top - 63)
+      ctx.fillText(strategy === 'lump' ? 'Lump Sum Invested' : 'Total Contributed', boxX + 18, boxY + 25)
       
-      ctx.fillStyle = '#00C853'
-      ctx.font = 'bold 28px -apple-system, sans-serif'
-      ctx.fillText(`$${(totalInvested / 1000).toFixed(1)}K`, padding.left + 15, padding.top - 33)
+      // Amount
+      ctx.fillStyle = '#1F2937'
+      ctx.font = 'bold 32px -apple-system, sans-serif'
+      ctx.fillText(`$${(totalInvested / 1000).toFixed(1)}K`, boxX + 18, boxY + 55)
       
-      ctx.fillStyle = totalGain >= 0 ? '#00C853' : '#EF4444'
-      ctx.font = 'bold 16px -apple-system, sans-serif'
-      ctx.fillText(`${totalGain >= 0 ? '+' : ''}${totalGain.toFixed(1)}% Growth`, padding.left + 15, padding.top - 10)
+      // Growth with arrow
+      const arrow = totalGain >= 0 ? '↑' : '↓'
+      ctx.fillStyle = totalGain >= 0 ? '#00E676' : '#FF5252'
+      ctx.font = 'bold 18px -apple-system, sans-serif'
+      ctx.fillText(`${arrow} ${Math.abs(totalGain).toFixed(1)}% Growth`, boxX + 18, boxY + 78)
     }
     
-    // Contributed label
+    // Contributed label - ENHANCED
     if (currentFrame > 0 && strategy === 'dca') {
       const result = getValueAtFrame(simulationData[0], currentFrame)
       const lastX = padding.left + (chartWidth / (simulationData[0].data.length - 1)) * currentFrame
       const lastY = height - padding.bottom - (result.invested / maxValue) * chartHeight
       
-      ctx.fillStyle = '#64748B'
-      ctx.font = 'bold 16px -apple-system, sans-serif'
-      ctx.textAlign = 'right'
-      ctx.fillText(`Contributed`, lastX - 18, lastY - 25)
-      ctx.fillText(`$${(result.invested / 1000).toFixed(2)}K`, lastX - 18, lastY - 3)
+      // Background badge
+      ctx.fillStyle = 'rgba(100, 116, 139, 0.95)'
+      ctx.shadowColor = 'rgba(0,0,0,0.2)'
+      ctx.shadowBlur = 10
+      
+      const labelWidth = 130
+      const labelHeight = 50
+      const labelX = lastX - labelWidth - 25
+      const labelY = lastY - 35
+      
+      // Rounded rectangle
+      const radius = 8
+      ctx.beginPath()
+      ctx.moveTo(labelX + radius, labelY)
+      ctx.lineTo(labelX + labelWidth - radius, labelY)
+      ctx.arcTo(labelX + labelWidth, labelY, labelX + labelWidth, labelY + radius, radius)
+      ctx.lineTo(labelX + labelWidth, labelY + labelHeight - radius)
+      ctx.arcTo(labelX + labelWidth, labelY + labelHeight, labelX + labelWidth - radius, labelY + labelHeight, radius)
+      ctx.lineTo(labelX + radius, labelY + labelHeight)
+      ctx.arcTo(labelX, labelY + labelHeight, labelX, labelY + labelHeight - radius, radius)
+      ctx.lineTo(labelX, labelY + radius)
+      ctx.arcTo(labelX, labelY, labelX + radius, labelY, radius)
+      ctx.closePath()
+      ctx.fill()
+      ctx.shadowBlur = 0
+      
+      ctx.fillStyle = 'white'
+      ctx.font = 'bold 14px -apple-system, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Contributed', labelX + labelWidth / 2, labelY + 20)
+      
+      ctx.font = 'bold 18px -apple-system, sans-serif'
+      ctx.fillText(`$${(result.invested / 1000).toFixed(2)}K`, labelX + labelWidth / 2, labelY + 40)
     }
   }, [simulationData, currentFrame, investmentAmount, strategy, logoImage, startMonth, endMonth])
 
