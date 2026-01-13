@@ -103,7 +103,14 @@ export default function Home() {
   const generateStockData = (ticker, startDate, endDate) => {
     const start = new Date(startDate)
     const end = new Date(endDate)
-    const months = Math.ceil((end - start) / (1000 * 60 * 60 * 24 * 30))
+    
+    // Calculate exact months between dates
+    let months = (end.getFullYear() - start.getFullYear()) * 12
+    months += end.getMonth() - start.getMonth()
+    
+    // If we're in the same month, that's still 1 month of investment
+    if (months === 0) months = 1
+    
     const data = []
     let currentPrice = 100 + Math.random() * 100
     
