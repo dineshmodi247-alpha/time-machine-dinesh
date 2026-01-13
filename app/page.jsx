@@ -492,48 +492,6 @@ export default function Home() {
         }
       }
     })
-      
-      // Add pulsing circle at current position
-      if (currentFrame > 0) {
-        const result = getValueAtFrame(sim, currentFrame)
-        const x = padding.left + (chartWidth / (sim.data.length - 1)) * currentFrame
-        const y = height - padding.bottom - (result.value / maxValue) * chartHeight
-        
-        // Pulsing effect
-        const pulse = Math.sin(Date.now() / 200) * 3 + 10
-        
-        ctx.beginPath()
-        ctx.arc(x, y, pulse, 0, Math.PI * 2)
-        ctx.fillStyle = color
-        ctx.shadowColor = color
-        ctx.shadowBlur = 20
-        ctx.fill()
-        ctx.shadowBlur = 0
-        
-        // White center
-        ctx.beginPath()
-        ctx.arc(x, y, 4, 0, Math.PI * 2)
-        ctx.fillStyle = 'white'
-        ctx.fill()
-        
-        // Show milestone badges for major gains
-        const percentGain = ((result.value - result.invested) / result.invested) * 100
-        const milestones = [50, 100, 200, 300, 500]
-        const currentMilestone = milestones.find(m => percentGain >= m && percentGain < m + 10)
-        
-        if (currentMilestone) {
-          // Milestone badge
-          ctx.save()
-          ctx.font = 'bold 16px -apple-system, sans-serif'
-          ctx.fillStyle = color
-          ctx.shadowColor = color
-          ctx.shadowBlur = 15
-          ctx.textAlign = 'center'
-          ctx.fillText(`🎉 ${currentMilestone}%`, x, y - 30)
-          ctx.restore()
-        }
-      }
-    })
     
     // Ticker boxes - ENHANCED & DYNAMIC
     if (currentFrame > 0) {
